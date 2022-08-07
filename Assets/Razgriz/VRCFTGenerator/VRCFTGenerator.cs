@@ -230,7 +230,6 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                 var binarySumTopLevelDirectBlendTree = aac.NewBlendTreeAsRaw();
                 List<ChildMotion> binarySumTopLevelChildMotions = new List<ChildMotion>();
-//                ChildMotion[] binarySumTopLevelChildMotions = new ChildMotion[summingLayerCount];
 
                 binarySumTopLevelDirectBlendTree.blendType = BlendTreeType.Direct;
                 binarySumTopLevelDirectBlendTree.blendParameter = binarySumTopLevelNormalizerParam.Name;
@@ -332,7 +331,6 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     }
 
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
-                    //binarySumTopLevelChildMotions[pr] = new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f};
 
                     pr++;
                 }
@@ -367,7 +365,6 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                     BlendTree childMotion = CreateCombinedTree(decodeLayer.FloatParameter(param), minusClip, zeroClip, oneClip);
 
-//                    binarySumTopLevelChildMotions[pr] = new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f};
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
 
                     pr++;
