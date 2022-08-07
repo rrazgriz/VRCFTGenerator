@@ -335,6 +335,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     pr++;
                 }
 
+                pr = 0;
                 foreach (string param in parseLayers)
                 {
 
@@ -365,6 +366,8 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     BlendTree childMotion = CreateCombinedTree(decodeLayer.FloatParameter(param), minusClip, zeroClip, oneClip);
 
                     binarySumTopLevelChildMotions[pr] = new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f};
+
+                    pr++;
                 }
 
                 binarySumTopLevelDirectBlendTree.children = binarySumTopLevelChildMotions;
