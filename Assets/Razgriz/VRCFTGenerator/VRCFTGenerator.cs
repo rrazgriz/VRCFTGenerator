@@ -336,7 +336,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 }
 
 //                pr = 0;
-                foreach (string param in parseLayers)
+                foreach (string param in selectedFloatParams)
                 {
 
                     var zeroClip  = aac.NewClip(param+"_0_scaled");
