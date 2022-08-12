@@ -89,7 +89,11 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
         private void AddFeatures()
         {
             InitializeAAC();
-            CreateFTBlendshapeController();
+            bool setupIsValid = ValidateFTSetup();
+            if(setupIsValid)
+            {
+                CreateFTBlendshapeController();
+            }
             AssetDatabase.SaveAssets();
         }
 
@@ -151,6 +155,111 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
         }
 
+        private bool ValidateFTSetup()
+        {
+            Dictionary<string, VRCFTValues.ParamMode> SelectedParameters = new Dictionary<string, VRCFTValues.ParamMode>();
+            Dictionary<string, string> SelectedShapes = new Dictionary<string, string>();
+            Dictionary<string, List<string>> BadParameters = new Dictionary<string, List<string>>();
+            List<string> DuplicateParameters = new List<string>();
+
+            bool isValid = true;
+
+            foreach (ParamSpecifier specification in my.paramsToAnimate)
+            {
+                if(!SelectedParameters.ContainsKey(specification.VRCFTParameter.ToString()))
+                {
+                    SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
+                } else {
+                    DuplicateParameters.Add(specification.VRCFTParameter.ToString());
+                    Debug.LogWarning("VRCFTGenerator: Parameter " + Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter) + " Is Present Multiple Times");
+                    isValid = false;
+                }
+            }
+
+            foreach (string param in SelectedParameters.Keys.ToArray())
+            {
+                List<string> shapesToAdd = new List<string>();
+
+                string param0 = "";
+
+                if (VRCFTValues.CombinedMapping.ContainsKey(param))
+                {
+                    param0 = VRCFTValues.CombinedMapping[param][0];
+                    string param1 = VRCFTValues.CombinedMapping[param][1];
+
+                    if (VRCFTValues.AveragedMapping.ContainsKey(param1))
+                    {
+                        shapesToAdd.Add(VRCFTValues.AveragedMapping[param1][0]);
+                        shapesToAdd.Add(VRCFTValues.AveragedMapping[param1][1]);
+                    } else {
+                        shapesToAdd.Add(param1);
+                    }
+                } else {
+                    param0 = param;
+                }
+
+                if (VRCFTValues.AveragedMapping.ContainsKey(param0))
+                {
+                    shapesToAdd.Add(VRCFTValues.AveragedMapping[param0][0]);
+                    shapesToAdd.Add(VRCFTValues.AveragedMapping[param0][1]);
+                } else {
+                    shapesToAdd.Add(param0);
+                }
+
+
+                foreach (string shape in shapesToAdd)
+                {
+                    if (!SelectedShapes.Keys.Contains(shape))
+                    {
+                        SelectedShapes.Add(shape, param);
+                    } else {
+                        isValid = false;
+                        if (!BadParameters.Keys.Contains(shape))
+                        {
+                            BadParameters.Add(shape, new List<string> { SelectedShapes[shape] });
+                        }
+
+                        BadParameters[shape].Add(param);
+                        
+                        Debug.LogWarning("VRCFTGenerator: Parameter " + param + " adds the shape " + shape + ", but it's already been added by " + SelectedShapes[shape]);
+                    }
+                }
+            }
+
+            if (!isValid)
+            {
+                string duplicateShapeList = Environment.NewLine;
+                if (BadParameters.Keys.Count > 0)
+                {
+                    duplicateShapeList = "The following shapes are specified by multiple parameters: " + Environment.NewLine;
+                    foreach (string shape in BadParameters.Keys)
+                    {
+                        duplicateShapeList += shape + ", added by " + Environment.NewLine;
+                        foreach (string param in BadParameters[shape])
+                        {
+                            duplicateShapeList += "   - " + param + Environment.NewLine;
+                        }
+                        duplicateShapeList += Environment.NewLine;
+                    }
+                }
+
+                if (DuplicateParameters.Count > 0)
+                {
+                    duplicateShapeList += Environment.NewLine + "The following Parameters are specified multiple times:" + Environment.NewLine;
+
+                    foreach (string param in DuplicateParameters)
+                    {
+                        duplicateShapeList += param + Environment.NewLine;
+                    }
+                }
+
+
+                EditorUtility.DisplayDialog("VRCFTGenerator: Duplicate Shapes or Parameters", duplicateShapeList, "OK");
+            }
+
+            return isValid;
+        }
+
         private void CreateFTBlendshapeController()
         {
             var fx = aac.CreateMainFxLayer();
@@ -168,7 +277,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
             }
 
-            // Pre-Parse Selected Parameters
+            // // Pre-Parse Selected Parameters
             foreach (string param in SelectedParameters.Keys.ToArray())
             {
                 VRCFTValues.ParamMode mode = SelectedParameters[param];
@@ -182,11 +291,9 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     fx.FloatParameter(param);
                     if(isParamCombined)
                     {
-                        // decodeParams.Add(param);
                         selectedFloatDecodeParams.Add(param);
                     }
                 } else {
-                    // decodeParams.Add(param);
                     selectedBinaryDecodeParams.Add(param);
                     // Extra bit for negative flag bool
                     parameterMemoryCost += isParamCombined ? 1 : 0;
