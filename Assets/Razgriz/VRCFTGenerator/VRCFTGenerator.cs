@@ -14,7 +14,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 {
 
     [Serializable]
-    public class ParamSpec
+    public class ParamSpecifier
     {
         public VRCFTValues.ParamMode mode;
         public VRCFTValues.ParameterName VRCFTParameter;
@@ -26,12 +26,13 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
         public AnimatorController assetContainer;
         public string assetKey;
         public bool writeDefaults = false;
+        public bool removeParametersFromControllerOnRemove = false;
 
         public SkinnedMeshRenderer[] blendshapeTargetMeshRenderers = new SkinnedMeshRenderer[1];
         public float remoteSmoothingTimeConstant = 0.7f;
         [Header("Use VRCFT name of params in synced params - ex. Face/Combined/General/TongueX => TongueX")]
         [Space(25)]
-        public ParamSpec[] paramsToAnimate;
+        public ParamSpecifier[] paramsToAnimate;
     }
 
     [CustomEditor(typeof(VRCFTGenerator), true)]
@@ -99,17 +100,16 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             AssetDatabase.SaveAssets();
         }
 
-        private static string[] FTBaseParameters = VRCFTValues.BlendshapeMapping.Keys.ToArray();
-        private static string[] FTBlendshapes = VRCFTValues.BlendshapeMapping.Values.ToArray();
-
         private void RemoveFTBlendshapeController()
         {
+            string systemPrefix = SystemName+"__";
             // Find FX Layer
             AnimatorController fxLayer = (AnimatorController) my.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController;
+            aac.RemoveAllMainLayers();
+
             foreach(var layer in fxLayer.layers)
             {
                 string layerName = layer.name;
-                string systemPrefix = SystemName+"__";
                 string supportingLayerName = layerName.Replace(systemPrefix, "");
 
                 if(layerName.StartsWith(systemPrefix))
@@ -117,129 +117,107 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     aac.RemoveAllSupportingLayers(supportingLayerName);
                 }
             }
+
+            if(my.removeParametersFromControllerOnRemove)
+            {
+                List<string> parameterNames = VRCFTValues.CombinedMapping.Keys.ToList();
+
+                parameterNames  = parameterNames.Concat(VRCFTValues.BlendshapeMapping.Keys.ToList())
+                                                .Concat(VRCFTValues.AveragedMapping.Keys.ToList())
+                                                .ToList();
+
+                AnimatorControllerParameter[] fxParameters = fxLayer.parameters;
+
+                int i = 0;
+
+                foreach (AnimatorControllerParameter animatorParameter in fxParameters)
+                {
+                    if (animatorParameter.name.Contains(systemPrefix) || animatorParameter.name == "FaceTracking")
+                    {
+                        fxLayer.RemoveParameter(fxParameters[i]);
+                    } else {
+                        foreach (string name in parameterNames)
+                        {
+                            if (animatorParameter.name.Contains(name))
+                            {
+                                fxLayer.RemoveParameter(fxParameters[i]);
+                            }
+                        }
+                    }
+
+                    i++;
+                }
+            }
+
         }
 
         private void CreateFTBlendshapeController()
         {
-            // Target a non-existent GameObject
-            var clipDoNothing = aac.NewClip("DoNothing").Animating(clip => clip.Animates("DoNothing", typeof(GameObject), "m_IsEnabled").WithOneFrame(0f));
-
             var fx = aac.CreateMainFxLayer();
 
-            // AacFlFloatParameter frameTimeMeasured = CreateFramerateMeasurementSystem();
-
-            // Set up Local/Remote Smoothing
-            // AacFlFloatParameter smoothingFactorParameter = CreateLocalRemoteSmoothingLayer(frameTimeMeasured);
-
-            var smoothingFactorParameter = fx.FloatParameter("FT_SmoothingAlpha");
-            fx.OverrideValue(smoothingFactorParameter, my.remoteSmoothingTimeConstant);
-
-
             Dictionary<string, VRCFTValues.ParamMode> SelectedParameters = new Dictionary<string, VRCFTValues.ParamMode>();
-
-            // BINARY
-            List<string> blendshapes = new List<string>();
-            // List<string> prioFloats = new List<string>();
-            List<string> selectedBinaryLayers = new List<string>();
+            List<string> selectedBinaryParams = new List<string>();
             List<string> selectedFloatParams = new List<string>();
-            List<string> parseLayers = new List<string>();
-            List<string> AveragedParam = new List<string>();
+            List<string> selectedParams = new List<string>();
             List<string> smoothingParams = new List<string>();
 
-            int FTParamCost = 0;
+            int parameterMemoryCost = 0;
 
-            foreach (ParamSpec paramSpec in my.paramsToAnimate)
+            foreach (ParamSpecifier specification in my.paramsToAnimate)
             {
-                SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), paramSpec.VRCFTParameter), paramSpec.mode);
+                SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
             }
 
-            // Pre-parsing
+            // Pre-Parse Selected Parameters
             foreach (string param in SelectedParameters.Keys.ToArray())
             {
-                if (VRCFTValues.CombinedMapping.ContainsKey(param))
+                VRCFTValues.ParamMode mode = SelectedParameters[param];
+                bool isParamFloat = mode == VRCFTValues.ParamMode.floatParam;
+                bool isParamCombined = VRCFTValues.CombinedMapping.ContainsKey(param);
+
+                parameterMemoryCost += (int)SelectedParameters[param];
+
+                selectedParams.Add(param);
+
+                if(isParamFloat)
+                {
+                    selectedFloatParams.Add(param);
+                    fx.FloatParameter(param);
+                } else {
+                    selectedBinaryParams.Add(param);
+                    // Extra bit for negative flag bool
+                    parameterMemoryCost += isParamCombined ? 1 : 0;
+                }
+
+                if (isParamCombined)
                 {
                     smoothingParams.Add(VRCFTValues.CombinedMapping[param][0]);
                     smoothingParams.Add(VRCFTValues.CombinedMapping[param][1]);
-
-                    bool param0IsAverage = VRCFTValues.AveragedMapping.ContainsKey(VRCFTValues.CombinedMapping[param][0]);
-                    bool param1IsAverage = VRCFTValues.AveragedMapping.ContainsKey(VRCFTValues.CombinedMapping[param][1]);
-
-                    if (param0IsAverage)
-                    {
-                        blendshapes.Add(VRCFTValues.AveragedMapping[VRCFTValues.CombinedMapping[param][0]][0]);
-                        blendshapes.Add(VRCFTValues.AveragedMapping[VRCFTValues.CombinedMapping[param][0]][1]);
-                    } else {
-                        blendshapes.Add(VRCFTValues.CombinedMapping[param][0]);
-                    }
-
-                    if (param1IsAverage)
-                    {
-                        blendshapes.Add(VRCFTValues.AveragedMapping[VRCFTValues.CombinedMapping[param][1]][0]);
-                        blendshapes.Add(VRCFTValues.AveragedMapping[VRCFTValues.CombinedMapping[param][1]][1]);
-                    } else {
-                        blendshapes.Add(VRCFTValues.CombinedMapping[param][1]);
-                    }
-
-                    FTParamCost += (int)SelectedParameters[param];
-
-                    if(SelectedParameters[param] != VRCFTValues.ParamMode.floatParam)
-                    {
-                        selectedBinaryLayers.Add(param);
-                        FTParamCost += 1;
-                    } else {
-                        selectedFloatParams.Add(param);
-                        fx.FloatParameter(param);
-                        // prioFloats.Add(VRCFTValues.CombinedMapping[param][0]);
-                        // prioFloats.Add(VRCFTValues.CombinedMapping[param][1]);
-                    }
                 } else {
                     smoothingParams.Add(param);
-
-                    blendshapes.Add(param);
-                    FTParamCost += (int)SelectedParameters[param];
-                    if(( (VRCFTValues.CombinedMapping.ContainsKey(param) || VRCFTValues.AveragedMapping.ContainsKey(param)) 
-                            && SelectedParameters[param] != VRCFTValues.ParamMode.floatParam))
-                    {
-                        FTParamCost++; 
-                    }
-
-                    if(SelectedParameters[param] != VRCFTValues.ParamMode.floatParam)
-                    {
-                        selectedBinaryLayers.Add(param);
-                    } else {
-                        fx.FloatParameter(param);
-                        selectedFloatParams.Add(param);
-                    }
                 }
             }
 
-            parseLayers = selectedBinaryLayers.Concat(selectedFloatParams).ToList();
-
             // Create Binary Cast/Decode Layers
-            int summingLayerCount = parseLayers.ToArray().Length;
-            if (summingLayerCount > 0)
+            int decodeBlendtreeChildren = selectedParams.Count;
+            if (decodeBlendtreeChildren > 0)
             {
                 var binaryCastLayer = aac.CreateSupportingFxLayer("BinaryCast");
                 var binaryCastState = binaryCastLayer.NewState("Cast");
                 binaryCastState.TransitionsTo(binaryCastState).AfterAnimationIsAtLeastAtPercent(0f).WithTransitionToSelf(); // re-evaluate every frame
 
-                var decodeLayer = aac.CreateSupportingFxLayer("DecodeLayer");
+                var decodeLayer = aac.CreateSupportingFxLayer("BinaryCombinedDecode");
                 var binarySumState = decodeLayer.NewState("DecodeBlendTree");
-                var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter("DecodeBlendTreeNormalizer");
-                decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, 1f/(float)summingLayerCount);
+                var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter(SystemName + "__" + "DecodeBlendTreeNormalizer");
+                decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, 1f/(float)decodeBlendtreeChildren);
 
-                var binarySumTopLevelDirectBlendTree = aac.NewBlendTreeAsRaw();
+                var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(SystemName + "__" + "Constant_1");
+                fx.OverrideValue(parameterDirectTreeNormalizer, 1f);
+                binaryCastState.Drives(parameterDirectTreeNormalizer, 1f);
+
                 List<ChildMotion> binarySumTopLevelChildMotions = new List<ChildMotion>();
 
-                binarySumTopLevelDirectBlendTree.blendType = BlendTreeType.Direct;
-                binarySumTopLevelDirectBlendTree.blendParameter = binarySumTopLevelNormalizerParam.Name;
-                binarySumTopLevelDirectBlendTree.minThreshold = 0;
-                binarySumTopLevelDirectBlendTree.maxThreshold = 1;
-                binarySumTopLevelDirectBlendTree.useAutomaticThresholds = false;
-
-                int pr = 0;
-
-                foreach (string param in selectedBinaryLayers)
+                foreach (string param in selectedBinaryParams)
                 {
                     int paramBits = (int)SelectedParameters[param];
                     bool isCombinedParam = VRCFTValues.CombinedMapping.ContainsKey(param);
@@ -249,56 +227,46 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     var paramPositive = binaryCastLayer.FloatParameter(paramPositiveName);
                     var paramNegative = binaryCastLayer.FloatParameter(paramPositiveName);
 
-                    var zeroClip = aac.NewClip(param+"_0_scaled");
-                    var oneClipParam1  = aac.NewClip(param+"_1_scaled");
-                    var oneClipParam2 = aac.NewClip(param+"_2_scaled");
+                    var zeroClip = aac.NewClip(param + "_0_scaled");
+                    var oneClipParam1  = aac.NewClip(param + "_1_scaled");
+                    var oneClipParam2 = aac.NewClip(param + "_2_scaled");
 
-                    var boolParamNegative = binaryCastLayer.BoolParameter(param+"Negative");
-                    var floatBoolParamNegative = binaryCastLayer.FloatParameter(param+"Negative_Float");
+                    var boolParamNegative = binaryCastLayer.BoolParameter(param + "Negative");
+                    var floatBoolParamNegative = binaryCastLayer.FloatParameter(param + "Negative_Float");
 
                     if(isCombinedParam) 
                     {
                         binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
                     }
                     
-                    foreach(string keyframeParam in parseLayers)
+                    foreach(string keyframeParam in selectedParams)
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
 
-                        // zeroClip.Animating(clip => clip.AnimatesAnimator(paramToAnimate).WithOneFrame(0f));
+                        float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
 
-                        float oneClipVal = keyframeParam == param ? 1f*(float)summingLayerCount : 0f;
-
-                        bool keyframeIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
-                        var keyframePositiveName = keyframeIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
-                        var keyframeNegativeName = keyframeIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
+                        bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
+                        var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
+                        var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
                         var keyframePositive = binaryCastLayer.FloatParameter(keyframePositiveName);
                         var keyframeNegative = binaryCastLayer.FloatParameter(keyframeNegativeName);
 
-                        if(keyframeIsCombined)
+                        zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                        oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                        oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+
+                        if(keyframeParamIsCombined)
                         {
-                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                             zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-
-                            oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
                             oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-
-                            oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                             oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
-                        } else {
-                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                            oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
-                            oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         }
                     }
 
                     BlendTree[] binarySumChildBlendTreesPositive = new BlendTree[paramBits];
                     BlendTree[] binarySumChildBlendTreesNegative = new BlendTree[paramBits];
-                    // BlendTree[] binarySumChildBlendTrees = new BlendTree[paramBits];
                     AacFlFloatParameter[] binarySumChildBlendTreesBlendParams = new AacFlFloatParameter[paramBits];
-                    var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(param+"_Normalizer");
-                    fx.OverrideValue(parameterDirectTreeNormalizer, 1f);
 
                     for (int j = 0; j < paramBits; j++)
                     {
@@ -331,145 +299,102 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     }
 
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
-
-                    pr++;
                 }
 
-//                pr = 0;
                 foreach (string param in selectedFloatParams)
                 {
+                    var zeroClip  = aac.NewClip(param + "_0_scaled");
+                    var oneClip   = aac.NewClip(param + "_1_scaled");
+                    var minusClip = aac.NewClip(param + "_-1_scaled");
 
-                    var zeroClip  = aac.NewClip(param+"_0_scaled");
-                    var oneClip   = aac.NewClip(param+"_1_scaled");
-                    var minusClip = aac.NewClip(param+"_-1_scaled");
-
-                    foreach(string keyframeParam in parseLayers)
+                    foreach(string keyframeParam in selectedParams)
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
 
-                        // zeroClip.Animating(clip => clip.AnimatesAnimator(paramToAnimate).WithOneFrame(0f));
+                        float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
 
-                        float oneClipVal = keyframeParam == param ? 1f*(float)summingLayerCount : 0f;
-
-                        bool keyframeIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
-                        var keyframePositiveName = keyframeIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
-                        var keyframeNegativeName = keyframeIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
+                        bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
+                        var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
+                        var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
                         var keyframePositive = binaryCastLayer.FloatParameter(keyframePositiveName);
                         var keyframeNegative = binaryCastLayer.FloatParameter(keyframeNegativeName);
 
-                        zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                        oneClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                        zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                        oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
                         minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
                     }
 
                     BlendTree childMotion = CreateCombinedTree(decodeLayer.FloatParameter(param), minusClip, zeroClip, oneClip);
-
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
-
-                    pr++;
                 }
 
-                binarySumTopLevelDirectBlendTree.children = binarySumTopLevelChildMotions.ToArray();
+                var binarySumTopLevelDirectBlendTree = CreateDirectTree(decodeLayer, binarySumTopLevelNormalizerParam, binarySumTopLevelChildMotions.ToArray());
                 binarySumState.WithAnimation(binarySumTopLevelDirectBlendTree);
             }
-
-            string[] UsedBlendshapes = blendshapes.ToArray();
-            // string[] UsedBlendshapes = FTBaseParameters.ToArray();
             
-            int numDirectStates;
-            numDirectStates = smoothingParams.ToArray().Length;
 
-            // Smoothing
-            if(true)
+            // Smoothing/Driving Layer
+            if(smoothingParams.Count > 0)
             {
-                var smoothingLayer = aac.CreateSupportingFxLayer("SmoothingLayer"); // Adds or Overwrites
+                var smoothingLayer = aac.CreateSupportingFxLayer("SmoothingDriving"); // Adds or Overwrites
 
-                var faceTrackingToggle = smoothingLayer.BoolParameter("FaceTracking");
-                smoothingLayer.OverrideValue(faceTrackingToggle, true);
-                var smoothingDirectBlendTree = aac.NewBlendTreeAsRaw();
+                var smoothingFactorParameter = fx.FloatParameter(SystemName + "__" + "SmoothingAlpha");
+                fx.OverrideValue(smoothingFactorParameter, my.remoteSmoothingTimeConstant);
 
-                // var prioritySmoothingAlpha = smoothingLayer.FloatParameter("PrioritySmoothingAlpha");
-                smoothingLayer.OverrideValue(smoothingFactorParameter, 0.7f);
+                var faceTrackingToggle = fx.BoolParameter("FaceTracking");
+                fx.OverrideValue(faceTrackingToggle, true);
+
+                int numDirectStates = smoothingParams.Count;
 
                 // Need to normalize all direct blendtree weights to sum to 1
-                var directNormalizerName = "Blend1";
-                var directNormalizer = fx.FloatParameter(directNormalizerName);
-
-                var directNormalizerName2 = "Blend2";
-                var directNormalizer2 = fx.FloatParameter(directNormalizerName2);
-                fx.OverrideValue(directNormalizer2, 1/(float)numDirectStates);
-
-                smoothingDirectBlendTree.blendType = BlendTreeType.Direct;
-                smoothingDirectBlendTree.blendParameter = smoothingFactorParameter.Name;
-                smoothingDirectBlendTree.minThreshold = 0;
-                smoothingDirectBlendTree.maxThreshold = 1;
-                smoothingDirectBlendTree.useAutomaticThresholds = false;
-
-                int i;
-
-                i = 0;
-
+                var directNormalizer = fx.FloatParameter(SystemName + "__" + "SmoothingDrivingTreeNormalizer");
                 fx.OverrideValue(directNormalizer, 1/(float)numDirectStates);
 
-                ChildMotion[] smoothingChildMotions = new ChildMotion[numDirectStates];
+                List<ChildMotion> smoothingChildMotions = new List<ChildMotion>();
 
                 foreach (string parameterToSmooth in smoothingParams)
                 {
-                    var parameter = smoothingLayer.FloatParameter(parameterToSmooth);
-                    var smoothedParameter = smoothingLayer.FloatParameter(parameterToSmooth + "_Smoothed");
+                    var parameter = fx.FloatParameter(parameterToSmooth);
+                    var smoothedParameter = fx.FloatParameter(parameterToSmooth + "_Smoothed");
 
-                    var zeroClip = aac.NewClip(parameterToSmooth+"param_0_scaled");
-                    var oneClip = aac.NewClip(parameterToSmooth+"param_1_scaled");
+                    var zeroClip = aac.NewClip(parameterToSmooth + "param_0_scaled");
+                    var oneClip  = aac.NewClip(parameterToSmooth + "param_1_scaled");
 
                     foreach(string paramName in smoothingParams)
                     {
-                        var paramNameSmoothed = smoothingLayer.FloatParameter(paramName + "_Smoothed");
-
-                        zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
+                        var paramNameSmoothed = fx.FloatParameter(paramName + "_Smoothed");
 
                         float driveVal = paramName == parameterToSmooth ? 1f*(float)numDirectStates : 0f;
+                        zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
                         oneClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(driveVal));
                         
                         foreach (var target in my.blendshapeTargetMeshRenderers)
                         {
                             if(VRCFTValues.AveragedMapping.ContainsKey(paramName))
                             {
-                                string blendshape1 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][0]];
-                                string blendshape2 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][1]];
+                                string blendshapeName1 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][0]];
+                                string blendshapeName2 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][1]];
                                 
-                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape1).WithOneFrame(0f);});
-                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape2).WithOneFrame(0f);});
-                                oneClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape1).WithOneFrame(driveVal*100f);});
-                                oneClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape2).WithOneFrame(driveVal*100f);});
+                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape." + blendshapeName1).WithOneFrame(0f);});
+                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape." + blendshapeName2).WithOneFrame(0f);});
+                                oneClip.Animating(clip  => {clip.Animates(target, "blendShape." + blendshapeName1).WithOneFrame(driveVal*100f);});
+                                oneClip.Animating(clip  => {clip.Animates(target, "blendShape." + blendshapeName2).WithOneFrame(driveVal*100f);});
                             } else {
-                                string blendshape = VRCFTValues.BlendshapeMapping[paramName];
+                                string blendshapeName = VRCFTValues.BlendshapeMapping[paramName];
 
-                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape).WithOneFrame(0f);});
-                                oneClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape).WithOneFrame(driveVal*100f);});
+                                zeroClip.Animating(clip => {clip.Animates(target, "blendShape." + blendshapeName).WithOneFrame(0f);});
+                                oneClip.Animating(clip =>  {clip.Animates(target, "blendShape." + blendshapeName).WithOneFrame(driveVal*100f);});
                             }
                         }
                     }
 
-
                     var factorTree = CreateFactorTree(smoothingFactorParameter, CreateProxyTree(parameter, zeroClip, oneClip), CreateSmoothingTree(smoothedParameter, zeroClip, oneClip));
-                    // var prioFactorTree = CreateFactorTree(smoothingFactorParameter, CreateProxyTree(parameter, zeroClip, oneClip), CreateSmoothingTree(smoothedParameter, zeroClip, oneClip));
-
-                    smoothingChildMotions[i] = new ChildMotion {motion = factorTree, directBlendParameter = directNormalizerName, timeScale = 1.0f, threshold = 0.0f};
-
-                /*
-                    if (prioFloats.Contains(parameterToSmooth))
-                    {
-                        smoothingChildMotions[i] = new ChildMotion {motion = prioFactorTree, directBlendParameter = directNormalizerName, timeScale = 1.0f, threshold = 0.0f};
-                    } else {
-                        smoothingChildMotions[i] = new ChildMotion {motion = factorTree, directBlendParameter = directNormalizerName, timeScale = 1.0f, threshold = 0.0f};
-                    }
-                */
-
-                    i++;
+                    smoothingChildMotions.Add(new ChildMotion {motion = factorTree, directBlendParameter = directNormalizer.Name, timeScale = 1.0f, threshold = 0.0f});
                 }
 
-                smoothingDirectBlendTree.children = smoothingChildMotions;
+                var smoothingDirectBlendTree = aac.NewBlendTreeAsRaw();
+                smoothingDirectBlendTree = CreateDirectTree(smoothingLayer, directNormalizer, smoothingChildMotions.ToArray());
 
                 var smoothingState = smoothingLayer.NewState("Smoothing").WithAnimation(smoothingDirectBlendTree);
                 var ftDisabledClip = aac.NewClip("FaceTracking_Off");
@@ -477,21 +402,20 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                 foreach (string paramName in smoothingParams)
                 {
-                    var smoothedParameter = smoothingLayer.FloatParameter(paramName + "_Smoothed");
+                    var smoothedParameter = fx.FloatParameter(paramName + "_Smoothed");
                     ftDisabledClip.Animating(clip => clip.AnimatesAnimator(smoothedParameter).WithOneFrame(0f));
 
                     foreach (var target in my.blendshapeTargetMeshRenderers)
                     {
                         if(VRCFTValues.AveragedMapping.ContainsKey(paramName))
                         {
-
-                                string blendshape1 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][0]];
-                                string blendshape2 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][1]];
+                            string blendshapeName1 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][0]];
+                            string blendshapeName2 = VRCFTValues.BlendshapeMapping[VRCFTValues.AveragedMapping[paramName][1]];
                             
-                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape1).WithOneFrame(0f);});
-                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape."+blendshape2).WithOneFrame(0f);});
+                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape." + blendshapeName1).WithOneFrame(0f);});
+                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape." + blendshapeName2).WithOneFrame(0f);});
                         } else {
-                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape."+VRCFTValues.BlendshapeMapping[paramName]).WithOneFrame(0f);});
+                            ftDisabledClip.Animating(clip => {clip.Animates(target, "blendShape." + VRCFTValues.BlendshapeMapping[paramName]).WithOneFrame(0f);});
                         }
                     }
                 }
@@ -501,8 +425,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             }
 
             aac.RemoveAllMainLayers();
-
-            EditorUtility.DisplayDialog("Face Tracking Generator","Generated Face Tracking, Parameter Cost: " + FTParamCost.ToString(), "OK");
+            EditorUtility.DisplayDialog("Face Tracking Generator","Generated Face Tracking, Parameter Cost: " + parameterMemoryCost.ToString(), "OK");
         }
 
         // // // // // // // // // // // // // // // // // // // // // // // // // // // 
@@ -695,7 +618,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             return smoothingTree;
         }
 
-        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, AacFlFloatParameter[] blendParameters, BlendTree[] children)
+        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, AacFlFloatParameter[] blendParameters, BlendTree[] children, float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
         {
             if(blendParameters.Length != children.Length)
             {
@@ -705,15 +628,29 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             var directTree = aac.NewBlendTreeAsRaw();
             directTree.blendType = BlendTreeType.Direct;
             directTree.blendParameter = normalizingParameter.Name;
-            directTree.minThreshold = 0;
-            directTree.maxThreshold = 1;
-            directTree.useAutomaticThresholds = false;
+            directTree.minThreshold = minThreshold;
+            directTree.maxThreshold = maxThreshold;
+            directTree.useAutomaticThresholds = useAutomaticThresholds;
             ChildMotion[] childMotions = new ChildMotion[blendParameters.Length];
             
             for(int ch = 0; ch < children.Length; ch++)
             {
                 childMotions[ch] = new ChildMotion {motion = children[ch], directBlendParameter = blendParameters[ch].Name, timeScale = 1.0f, threshold = 0.0f};
             }
+
+            directTree.children = childMotions;
+
+            return directTree;
+        }
+
+        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, ChildMotion[] childMotions, float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
+        {
+            var directTree = aac.NewBlendTreeAsRaw();
+            directTree.blendType = BlendTreeType.Direct;
+            directTree.blendParameter = normalizingParameter.Name;
+            directTree.minThreshold = minThreshold;
+            directTree.maxThreshold = maxThreshold;
+            directTree.useAutomaticThresholds = useAutomaticThresholds;
 
             directTree.children = childMotions;
 
