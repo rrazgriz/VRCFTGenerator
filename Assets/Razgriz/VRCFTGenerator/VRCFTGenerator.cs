@@ -80,7 +80,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
             DrawUILine(darkgray);
             if (GUILayout.Button("Add Selected Features")){ AddFeatures(); }
-            if (GUILayout.Button("Remove Selected Features")){ RemoveFeatures(); }
+            if (GUILayout.Button("Remove FT System")){ RemoveFeatures(); }
             serializedObject.ApplyModifiedProperties();
         }
 
@@ -156,9 +156,9 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             var fx = aac.CreateMainFxLayer();
 
             Dictionary<string, VRCFTValues.ParamMode> SelectedParameters = new Dictionary<string, VRCFTValues.ParamMode>();
-            List<string> selectedBinaryParams = new List<string>();
-            List<string> selectedFloatParams = new List<string>();
-            List<string> selectedParams = new List<string>();
+            List<string> selectedBinaryDecodeParams = new List<string>();
+            List<string> selectedFloatDecodeParams = new List<string>();
+            List<string> decodeParams = new List<string>();
             List<string> smoothingParams = new List<string>();
 
             int parameterMemoryCost = 0;
@@ -177,14 +177,17 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                 parameterMemoryCost += (int)SelectedParameters[param];
 
-                selectedParams.Add(param);
-
                 if(isParamFloat)
                 {
-                    selectedFloatParams.Add(param);
                     fx.FloatParameter(param);
+                    if(isParamCombined)
+                    {
+                        // decodeParams.Add(param);
+                        selectedFloatDecodeParams.Add(param);
+                    }
                 } else {
-                    selectedBinaryParams.Add(param);
+                    // decodeParams.Add(param);
+                    selectedBinaryDecodeParams.Add(param);
                     // Extra bit for negative flag bool
                     parameterMemoryCost += isParamCombined ? 1 : 0;
                 }
@@ -198,8 +201,10 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 }
             }
 
-            // Create Binary Cast/Decode Layers
-            int decodeBlendtreeChildren = selectedParams.Count;
+            decodeParams = selectedFloatDecodeParams.Concat(selectedBinaryDecodeParams).ToList();
+
+            // Create Binary Cast/Decode Layers (only if needed)
+            int decodeBlendtreeChildren = decodeParams.Count;
             if (decodeBlendtreeChildren > 0)
             {
                 var binaryCastLayer = aac.CreateSupportingFxLayer("BinaryCast");
@@ -217,7 +222,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                 List<ChildMotion> binarySumTopLevelChildMotions = new List<ChildMotion>();
 
-                foreach (string param in selectedBinaryParams)
+                foreach (string param in selectedBinaryDecodeParams)
                 {
                     int paramBits = (int)SelectedParameters[param];
                     bool isCombinedParam = VRCFTValues.CombinedMapping.ContainsKey(param);
@@ -239,7 +244,7 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                         binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
                     }
                     
-                    foreach(string keyframeParam in selectedParams)
+                    foreach(string keyframeParam in decodeParams)
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
 
@@ -301,13 +306,13 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
                 }
 
-                foreach (string param in selectedFloatParams)
+                foreach (string param in selectedFloatDecodeParams)
                 {
                     var zeroClip  = aac.NewClip(param + "_0_scaled");
                     var oneClip   = aac.NewClip(param + "_1_scaled");
                     var minusClip = aac.NewClip(param + "_-1_scaled");
 
-                    foreach(string keyframeParam in selectedParams)
+                    foreach(string keyframeParam in decodeParams)
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
 
