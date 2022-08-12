@@ -11,11 +11,9 @@ Please see the VRCFT wiki for more information on [Blendshapes](https://github.c
 
 ⚠ **Please take note**: this tool relies on having a version of Animator As Code that supports VRC parameter driver copy behavior. A version of the framework is included with this functionality added. When AAC is updated to support this, you can remove the "Framework" folder and use the main Animator As Code release from https://github.com/hai-vr/av3-animator-as-code. I will try to remember to remove this folder (and update the code, if necessary) once that change is merged.
 
-### Known Issues
+### Changelog
 
-- If no float parameters are specified, the script will fail to run
-- A binary cast layer will be generated even if no parameters are set to binary
-- If "Raw" or "Averaged" parameters are selected for use, decode children slots will be generated for them with None motions. To avoid this, don't directly drive "Raw" or "Averaged" parameters
+- 2022-08-12: Improved code quality, removed redundant code, added setup verification (will not generate if duplicate params/shapes are present), won't create cast/decode layer if unneeded, won't create unnecessary decode entries, fixed Direct/Averaged Parameters
 
 ### Improvements To Make
 
