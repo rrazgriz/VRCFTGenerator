@@ -181,24 +181,6 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                     i++;
                 }
-
-                VRCExpressionParameters.Parameter[] expressionParameters = my.avatar.expressionParameters.parameters;
-
-                foreach (VRCExpressionParameters.Parameter expressionParameter in expressionParameters)
-                {
-                    if (expressionParameter.name.Contains(systemPrefix) || expressionParameter.name == "FaceTracking")
-                    {
-                        VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
-                    }
-
-                    foreach (string p in parameterNames)
-                    {
-                        if (expressionParameter.name.Contains(p))
-                        {
-                            VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
-                        }
-                    }
-                }
             }
         }
 
