@@ -14,13 +14,12 @@ Please see the VRCFT wiki for more information on [Blendshapes](https://github.c
 ### Changelog
 
 - 2022-08-12: Improved code quality, removed redundant code, added setup verification (will not generate if duplicate params/shapes are present), won't create cast/decode layer if unneeded, won't create unnecessary decode entries, fixed Direct/Averaged Parameters
+- 2022-08-18: Automatically add/remove parameters from VRChat SDK Parameters Object
 
 ### Improvements To Make
 
-- Automatically add/remove parameters from VRChat SDK Parameters Object
 - Support Eye tracking parameters (cases are more complex)
 - Casting layer currently transitions to self every frame, could be improved
-
 
 ## Usage
 
