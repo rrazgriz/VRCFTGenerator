@@ -6,7 +6,6 @@ using AnimatorAsCode.V0;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
-using ValueType = VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.ValueType;
 using UnityEditor;
 using UnityEditor.Animations;
 
@@ -26,7 +25,8 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
         public AnimatorController assetContainer;
         public string assetKey;
         public bool writeDefaults = false;
-        public bool removeParametersFromControllerOnRemove = false;
+        public bool removeAnimatorParams = true;
+        public bool manageExpressionParameters = true;
 
         public SkinnedMeshRenderer[] blendshapeTargetMeshRenderers = new SkinnedMeshRenderer[1];
         public float remoteSmoothingTimeConstant = 0.7f;
@@ -89,19 +89,28 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
         private void AddFeatures()
         {
             InitializeAAC();
-            bool setupIsValid = ValidateFTSetup();
-            if(setupIsValid)
+            int cost = ValidateFTSetup();
+            if(cost > 0)
             {
-                CreateFTBlendshapeController();
+                bool add = EditorUtility.DisplayDialog("Add Face Tracking","Generate Face Tracking, Parameter Cost: " + cost.ToString(), "OK", "Cancel");
+                if(add)
+                {
+                    CreateFTBlendshapeController();
+                    AssetDatabase.SaveAssets();
+                }
             }
-            AssetDatabase.SaveAssets();
+            
         }
 
         private void RemoveFeatures()
         {
             InitializeAAC();
-            RemoveFTBlendshapeController();
-            AssetDatabase.SaveAssets();
+            bool remove = EditorUtility.DisplayDialog("Remove Face Tracking", "Remove Face Tracking from Animator (and items selected for deletion)?", "OK", "Cancel");
+            if (remove)
+            {
+                RemoveFTBlendshapeController();
+                AssetDatabase.SaveAssets();
+            }
         }
 
         private void RemoveFTBlendshapeController()
@@ -122,16 +131,37 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 }
             }
 
-            if(my.removeParametersFromControllerOnRemove)
+            List<string> parameterNames = VRCFTValues.CombinedMapping.Keys.ToList();
+
+            parameterNames  = parameterNames.Concat(VRCFTValues.BlendshapeMapping.Keys.ToList())
+                                            .Concat(VRCFTValues.AveragedMapping.Keys.ToList())
+                                            .ToList();
+
+            AnimatorControllerParameter[] fxParameters = fxLayer.parameters;
+
+            if (my.manageExpressionParameters)
             {
-                List<string> parameterNames = VRCFTValues.CombinedMapping.Keys.ToList();
+                VRCExpressionParameters.Parameter[] expressionParameters = my.avatar.expressionParameters.parameters;
 
-                parameterNames  = parameterNames.Concat(VRCFTValues.BlendshapeMapping.Keys.ToList())
-                                                .Concat(VRCFTValues.AveragedMapping.Keys.ToList())
-                                                .ToList();
+                foreach (VRCExpressionParameters.Parameter expressionParameter in expressionParameters)
+                {
+                    if (expressionParameter.name.Contains(systemPrefix) || expressionParameter.name == "FaceTracking")
+                    {
+                        VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                    }
 
-                AnimatorControllerParameter[] fxParameters = fxLayer.parameters;
+                    foreach (string p in parameterNames)
+                    {
+                        if (expressionParameter.name.Contains(p))
+                        {
+                            VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                        }
+                    }
+                }
+            }
 
+            if(my.removeAnimatorParams)
+            {
                 int i = 0;
 
                 foreach (AnimatorControllerParameter animatorParameter in fxParameters)
@@ -151,12 +181,30 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 
                     i++;
                 }
-            }
 
+                VRCExpressionParameters.Parameter[] expressionParameters = my.avatar.expressionParameters.parameters;
+
+                foreach (VRCExpressionParameters.Parameter expressionParameter in expressionParameters)
+                {
+                    if (expressionParameter.name.Contains(systemPrefix) || expressionParameter.name == "FaceTracking")
+                    {
+                        VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                    }
+
+                    foreach (string p in parameterNames)
+                    {
+                        if (expressionParameter.name.Contains(p))
+                        {
+                            VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                        }
+                    }
+                }
+            }
         }
 
-        private bool ValidateFTSetup()
+        private int ValidateFTSetup()
         {
+            int cost = 1;
             Dictionary<string, VRCFTValues.ParamMode> SelectedParameters = new Dictionary<string, VRCFTValues.ParamMode>();
             Dictionary<string, string> SelectedShapes = new Dictionary<string, string>();
             Dictionary<string, List<string>> BadParameters = new Dictionary<string, List<string>>();
@@ -169,6 +217,8 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 if(!SelectedParameters.ContainsKey(specification.VRCFTParameter.ToString()))
                 {
                     SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
+                    cost += (int) specification.mode;
+                    cost += VRCFTValues.CombinedMapping.ContainsKey(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter)) && specification.mode != VRCFTValues.ParamMode.floatParam ? 1 : 0;
                 } else {
                     DuplicateParameters.Add(specification.VRCFTParameter.ToString());
                     Debug.LogWarning("VRCFTGenerator: Parameter " + Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter) + " Is Present Multiple Times");
@@ -257,7 +307,12 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                 EditorUtility.DisplayDialog("VRCFTGenerator: Duplicate Shapes or Parameters", duplicateShapeList, "OK");
             }
 
-            return isValid;
+            if (!isValid)
+            {
+                cost = 0;
+            }
+
+            return cost;
         }
 
         private void CreateFTBlendshapeController()
@@ -270,14 +325,14 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             List<string> decodeParams = new List<string>();
             List<string> smoothingParams = new List<string>();
 
-            int parameterMemoryCost = 0;
+            int parameterMemoryCost = 1; // 1 for Face Tracking toggle
 
             foreach (ParamSpecifier specification in my.paramsToAnimate)
             {
                 SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
             }
 
-            // // Pre-Parse Selected Parameters
+            // Pre-Parse Selected Parameters
             foreach (string param in SelectedParameters.Keys.ToArray())
             {
                 VRCFTValues.ParamMode mode = SelectedParameters[param];
@@ -307,6 +362,10 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
                     smoothingParams.Add(param);
                 }
             }
+
+            
+
+
 
             decodeParams = selectedFloatDecodeParams.Concat(selectedBinaryDecodeParams).ToList();
 
@@ -537,10 +596,53 @@ namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
             }
 
             aac.RemoveAllMainLayers();
-            EditorUtility.DisplayDialog("Face Tracking Generator","Generated Face Tracking, Parameter Cost: " + parameterMemoryCost.ToString(), "OK");
+            if (my.manageExpressionParameters)
+            {
+                AddParametersToAvatar(my.avatar, SelectedParameters);
+            }
+            
         }
 
         // // // // // // // // // // // // // // // // // // // // // // // // // // // 
+
+        private void AddParametersToAvatar(VRCAvatarDescriptor avatar, Dictionary<string, VRCFTValues.ParamMode> parameters)
+        {
+            VRCFTGenerator_ParameterUtility.AddParameter("FaceTracking", VRCExpressionParameters.ValueType.Bool, true, true, avatar);
+
+            foreach (var param in parameters)
+            {
+                if (param.Value == VRCFTValues.ParamMode.floatParam)
+                {
+                    if(!VRCFTGenerator_ParameterUtility.ParameterExists(param.Key, avatar))
+                    {
+                        VRCFTGenerator_ParameterUtility.AddParameter(param.Key, VRCExpressionParameters.ValueType.Float, 0f, false, avatar);
+                    }
+
+                }
+                else
+                {
+                    int paramBits = (int) param.Value;
+                    bool isCombinedParam = VRCFTValues.CombinedMapping.ContainsKey(param.Key);
+
+                    if (isCombinedParam && !VRCFTGenerator_ParameterUtility.ParameterExists(param.Key, avatar))
+                    {
+                        VRCFTGenerator_ParameterUtility.AddParameter(param.Key + "Negative", VRCExpressionParameters.ValueType.Bool, false, false, avatar);
+                    }
+
+                    for (int j = 0; j < paramBits; j++)
+                    {
+                        int binarySuffix = (int) Mathf.Pow(2, j);
+                        string p = param.Key + binarySuffix.ToString();
+
+                        if (!VRCFTGenerator_ParameterUtility.ParameterExists(param.Key, avatar))
+                        {
+                            VRCFTGenerator_ParameterUtility.AddParameter(p, VRCExpressionParameters.ValueType.Bool, false, false, avatar);
+                        }
+                    }
+                }
+
+            }
+        }
 
         private AacFlFloatParameter CreateFramerateMeasurementSystem()
         {
