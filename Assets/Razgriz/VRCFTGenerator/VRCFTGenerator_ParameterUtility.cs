@@ -7,18 +7,19 @@
 // it took me like 5 minutes
 // i dont even want credit its w/e
 // just yeet it wherever you want
+#if UNITY_EDITOR
+#if VRC_SDK_VRCSDK3
 
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
-#if VRC_SDK_VRCSDK3
+using AnimatorAsCode.V0;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
-using AnimatorAsCode.V0;
 
-#if UNITY_EDITOR
+
 namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
 {
     public static class VRCFTGenerator_ParameterUtility
