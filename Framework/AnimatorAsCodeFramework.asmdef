@@ -1,5 +1,5 @@
 {
-    "name": "AnimatorAsCodeFramework",
+    "name": "AnimatorAsCodeFramework_VRCFTGenerator",
     "references": [],
     "includePlatforms": [
         "Editor"

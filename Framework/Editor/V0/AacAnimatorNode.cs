@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // ReSharper disable once CheckNamespace
-namespace AnimatorAsCode.V0
+namespace VRCFTGenerator.AnimatorAsCode.V0
 {
     public abstract class AacAnimatorNode
     {

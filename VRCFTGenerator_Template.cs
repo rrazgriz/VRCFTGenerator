@@ -1,12 +1,12 @@
 ﻿#if UNITY_EDITOR
 using System;
-using AnimatorAsCode.V0;
+using VRCFTGenerator.AnimatorAsCode.V0;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using AnimatorController = UnityEditor.Animations.AnimatorController;
 
-namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
+namespace Raz.VRCFTGenerator
 {
     public static class AACTemplate
     {

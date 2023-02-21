@@ -15,12 +15,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
-using AnimatorAsCode.V0;
+using VRCFTGenerator.AnimatorAsCode.V0;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 
 
-namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
+namespace Raz.VRCFTGenerator
 {
     public static class VRCFTGenerator_ParameterUtility
     {

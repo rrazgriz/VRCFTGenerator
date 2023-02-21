@@ -7,7 +7,7 @@ using VRC.SDK3.Avatars.Components;
 using VRC.SDKBase;
 
 // ReSharper disable once CheckNamespace
-namespace AnimatorAsCode.V0
+namespace VRCFTGenerator.AnimatorAsCode.V0
 {
     internal class AacBackingAnimator
     {

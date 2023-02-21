@@ -7,7 +7,7 @@ using VRC.SDK3.Avatars.Components;
 using Random = UnityEngine.Random;
 
 // ReSharper disable once CheckNamespace
-namespace AnimatorAsCode.V0
+namespace VRCFTGenerator.AnimatorAsCode.V0
 {
     public static class AacV0
     {

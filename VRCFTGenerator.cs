@@ -2,14 +2,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using AnimatorAsCode.V0;
+using VRCFTGenerator.AnimatorAsCode.V0;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using UnityEditor;
 using UnityEditor.Animations;
 
-namespace AnimatorAsCodeFramework.Razgriz.VRCFTGenerator
+namespace Raz.VRCFTGenerator
 {
 
     [Serializable]

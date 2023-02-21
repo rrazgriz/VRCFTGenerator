@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.Animations;
-using static AnimatorAsCode.V0.AacFlConditionSimple;
+using static VRCFTGenerator.AnimatorAsCode.V0.AacFlConditionSimple;
 using static UnityEditor.Animations.AnimatorConditionMode;
 
 // ReSharper disable once CheckNamespace
-namespace AnimatorAsCode.V0
+namespace VRCFTGenerator.AnimatorAsCode.V0
 {
     class AacFlConditionSimple : IAacFlCondition
     {
