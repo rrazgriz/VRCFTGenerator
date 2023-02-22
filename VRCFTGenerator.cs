@@ -46,6 +46,7 @@ namespace Raz.VRCFTGenerator
             r.x-=2;
             EditorGUI.DrawRect(r, color);
         }
+        static Color darkgray = new Color(0.184f, 0.184f, 0.184f, 1.0f);
 
         private const string SystemName = "FT";
         private VRCFTGenerator my;
@@ -60,8 +61,102 @@ namespace Raz.VRCFTGenerator
 
         // // // // // // // // // // // // // // // // // // // // // // // // // // // 
 
+        private bool paramListFoldout = true;
+        private bool paramCoverageFoldout = true;
+
+        private bool AnalyzeSetupGui()
+        {
+            bool hasDuplicates = false;
+
+            paramListFoldout = EditorGUILayout.BeginFoldoutHeaderGroup(paramListFoldout, "Shapes in use");
+
+            HashSet<string> shapesInUse = new HashSet<string>();
+            int paramCost = 1; // One base for global FT toggle
+
+            foreach(var parameterSpec in my.paramsToAnimate)
+            {
+                paramCost += (int)parameterSpec.mode;
+                string paramName = parameterSpec.VRCFTParameter.ToString();
+                List<string> shapeParams = new List<string>();
+
+                if(VRCFTValues.CombinedMapping.ContainsKey(paramName))
+                {
+                    if(parameterSpec.mode != VRCFTValues.ParamMode.floatParam) paramCost++;
+                    foreach(string constituentParam in VRCFTValues.CombinedMapping[paramName])
+                    {
+                        if(VRCFTValues.AveragedMapping.ContainsKey(constituentParam))
+                        {
+                            shapeParams.AddRange(VRCFTValues.AveragedMapping[constituentParam]);
+                        }
+                        else
+                        {
+                            shapeParams.Add(constituentParam);
+                        }
+                    }
+                }
+                else if(VRCFTValues.AveragedMapping.ContainsKey(paramName))
+                {
+                    if(parameterSpec.mode != VRCFTValues.ParamMode.floatParam) paramCost++;
+                    shapeParams.AddRange(VRCFTValues.AveragedMapping[paramName]);
+                }
+                else
+                {
+                    shapeParams.Add(paramName);
+                }
+
+                foreach(var shape in shapeParams)
+                {
+                    using(new EditorGUILayout.HorizontalScope())
+                    {
+                        bool isDuplicate = !shapesInUse.Add(shape);
+                        if(isDuplicate)
+                            hasDuplicates = true;
+
+                        if(paramListFoldout)
+                        {
+                            Texture icon = isDuplicate ? EditorGUIUtility.IconContent("Error").image : (Texture)null;
+                            var label = new GUIContent($"    {shape}", icon);
+                            EditorGUILayout.LabelField(label);
+
+                            if(shapeParams.Count > 1)
+                                EditorGUILayout.LabelField($"({paramName})", EditorStyles.centeredGreyMiniLabel);  
+                        }                          
+                    }
+                }
+            }
+
+            int usedShapes = shapesInUse.Count;
+            int availableShapes = VRCFTValues.BlendshapeMapping.Keys.Count;
+            float coveragePercent = ((float)usedShapes)/((float)availableShapes) * 100f;
+
+            if(paramListFoldout)
+            {
+                paramCoverageFoldout = EditorGUILayout.Foldout(paramCoverageFoldout, "Unused Blendshapes");
+                if(paramCoverageFoldout)
+                {
+                    foreach(string shape in VRCFTValues.BlendshapeMapping.Keys)
+                    {
+                        if(!shapesInUse.Contains(shape))
+                        {
+                            EditorGUILayout.LabelField(shape);
+                        }
+                    }
+                }
+            }
+
+            EditorGUILayout.EndFoldoutHeaderGroup();
+
+            DrawUILine(darkgray);
+            EditorGUILayout.LabelField($"Shapes used: {usedShapes}/{availableShapes} ({coveragePercent.ToString("0")}%)");
+            EditorGUILayout.LabelField($"Parameter Cost: {paramCost} bits");
+
+            return hasDuplicates;
+        }
+
         public override void OnInspectorGUI()
         {
+            my = (VRCFTGenerator) target;
+
             serializedObject.Update();
             // Unity GUI Magic?
             var prop = serializedObject.FindProperty("assetKey");
@@ -73,13 +168,34 @@ namespace Raz.VRCFTGenerator
 
             this.DrawDefaultInspector();
 
-            Color darkgray = new Color(0.184f, 0.184f, 0.184f, 1.0f);
             DrawUILine(darkgray);
 
-            // Add More Buttons Here :)
+            bool hasDuplicates = AnalyzeSetupGui();
+
+            bool noAvatar = my.avatar == null;
+            bool noContainer = my.assetContainer == null;
+            bool noFX = false;
+            if(!noAvatar)
+                noFX = my.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController == null;
 
             DrawUILine(darkgray);
-            if (GUILayout.Button("Add Selected Features")){ AddFeatures(); }
+
+            if(noAvatar)
+                EditorGUILayout.HelpBox("No avatar descriptor specified. Please provide an avatar descriptor.", MessageType.Error);
+
+            if(noContainer)
+                EditorGUILayout.HelpBox("No asset container. Please create a new, blank animator controller to contain system assets.", MessageType.Error);
+
+            if(hasDuplicates)
+                EditorGUILayout.HelpBox("Duplicate Parameters in setup. Please ensure there are no duplicates.", MessageType.Error);
+
+            if(noFX)
+                EditorGUILayout.HelpBox("No FX Layer. Please add an FX layer", MessageType.Error);
+
+            using(new EditorGUI.DisabledScope(noAvatar || noContainer || hasDuplicates || noFX))
+            {
+                if (GUILayout.Button("Add Selected Features")){ AddFeatures(); }
+            }
             if (GUILayout.Button("Remove FT System")){ RemoveFeatures(); }
             serializedObject.ApplyModifiedProperties();
         }
