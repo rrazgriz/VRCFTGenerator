@@ -202,6 +202,18 @@ namespace Raz.VRCFTGenerator
 
         // // //
 
+        internal string SystemPrefix
+        {
+            get => SystemName + "/";
+            private set {}
+        }
+
+        internal string FaceTrackingToggleParameter
+        {
+            get => "FaceTracking";
+            private set {}
+        }
+
         private void AddFeatures()
         {
             InitializeAAC();
@@ -231,7 +243,6 @@ namespace Raz.VRCFTGenerator
 
         private void RemoveFTBlendshapeController()
         {
-            string systemPrefix = SystemName+"__";
             // Find FX Layer
             AnimatorController fxLayer = (AnimatorController) my.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController;
             aac.RemoveAllMainLayers();
@@ -239,9 +250,9 @@ namespace Raz.VRCFTGenerator
             foreach(var layer in fxLayer.layers)
             {
                 string layerName = layer.name;
-                string supportingLayerName = layerName.Replace(systemPrefix, "");
+                string supportingLayerName = layerName.Replace(SystemName + "__", "");
 
-                if(layerName.StartsWith(systemPrefix))
+                if(layerName.StartsWith(SystemName))
                 {
                     aac.RemoveAllSupportingLayers(supportingLayerName);
                 }
@@ -261,7 +272,7 @@ namespace Raz.VRCFTGenerator
 
                 foreach (VRCExpressionParameters.Parameter expressionParameter in expressionParameters)
                 {
-                    if (expressionParameter.name.Contains(systemPrefix) || expressionParameter.name == "FaceTracking")
+                    if (expressionParameter.name.Contains(SystemPrefix) || expressionParameter.name == FaceTrackingToggleParameter)
                     {
                         VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
                     }
@@ -282,7 +293,7 @@ namespace Raz.VRCFTGenerator
 
                 foreach (AnimatorControllerParameter animatorParameter in fxParameters)
                 {
-                    if (animatorParameter.name.Contains(systemPrefix) || animatorParameter.name == "FaceTracking")
+                    if (animatorParameter.name.Contains(SystemPrefix) || animatorParameter.name == FaceTrackingToggleParameter)
                     {
                         fxLayer.RemoveParameter(fxParameters[i]);
                     } else {
@@ -422,8 +433,11 @@ namespace Raz.VRCFTGenerator
             List<string> selectedFloatDecodeParams = new List<string>();
             List<string> decodeParams = new List<string>();
             List<string> smoothingParams = new List<string>();
+            List<string> directFloatParamsNoPrefix = new List<string>();
 
             int parameterMemoryCost = 1; // 1 for Face Tracking toggle
+
+            var faceTrackingToggle = fx.BoolParameter(FaceTrackingToggleParameter);
 
             foreach (ParamSpecifier specification in my.paramsToAnimate)
             {
@@ -437,7 +451,8 @@ namespace Raz.VRCFTGenerator
                 bool isParamFloat = mode == VRCFTValues.ParamMode.floatParam;
                 bool isParamCombined = VRCFTValues.CombinedMapping.ContainsKey(param);
 
-                parameterMemoryCost += (int)SelectedParameters[param];
+                int paramBits = (int)SelectedParameters[param];
+                parameterMemoryCost += paramBits;
 
                 if(isParamFloat)
                 {
@@ -446,10 +461,27 @@ namespace Raz.VRCFTGenerator
                     {
                         selectedFloatDecodeParams.Add(param);
                     }
+                    else
+                    {
+                        directFloatParamsNoPrefix.Add(param);
+                    }
                 } else {
+                    for (int j = 0; j < paramBits; j++)
+                    {
+                        int binarySuffix = (int)Mathf.Pow(2, j);
+                        string p = param + binarySuffix.ToString();
+                        fx.BoolParameter(p);
+                    }
+                    
+                    if(isParamCombined)
+                    {
+                        // Extra bit for negative flag bool
+                        parameterMemoryCost++;
+
+                        fx.BoolParameter(param + "Negative");
+                    }
+
                     selectedBinaryDecodeParams.Add(param);
-                    // Extra bit for negative flag bool
-                    parameterMemoryCost += isParamCombined ? 1 : 0;
                 }
 
                 if (isParamCombined)
@@ -462,9 +494,6 @@ namespace Raz.VRCFTGenerator
             }
 
             
-
-
-
             decodeParams = selectedFloatDecodeParams.Concat(selectedBinaryDecodeParams).ToList();
 
             // Create Binary Cast/Decode Layers (only if needed)
@@ -477,10 +506,10 @@ namespace Raz.VRCFTGenerator
 
                 var decodeLayer = aac.CreateSupportingFxLayer("BinaryCombinedDecode");
                 var binarySumState = decodeLayer.NewState("DecodeBlendTree");
-                var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter(SystemName + "__" + "DecodeBlendTreeNormalizer");
+                var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter(SystemPrefix + "DecodeBlendTreeNormalizer");
                 decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, 1f/(float)decodeBlendtreeChildren);
 
-                var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(SystemName + "__" + "Constant_1");
+                var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(SystemPrefix + "Constant_1");
                 fx.OverrideValue(parameterDirectTreeNormalizer, 1f);
                 binaryCastState.Drives(parameterDirectTreeNormalizer, 1f);
 
@@ -491,26 +520,16 @@ namespace Raz.VRCFTGenerator
                     int paramBits = (int)SelectedParameters[param];
                     bool isCombinedParam = VRCFTValues.CombinedMapping.ContainsKey(param);
                     string paramPositiveName = isCombinedParam ? VRCFTValues.CombinedMapping[param][0] : param;
-                    string paramNegativeName = isCombinedParam ? VRCFTValues.CombinedMapping[param][1] : param;
 
-                    var paramPositive = binaryCastLayer.FloatParameter(paramPositiveName);
-                    var paramNegative = binaryCastLayer.FloatParameter(paramPositiveName);
+                    var paramPositive = binaryCastLayer.FloatParameter(SystemPrefix + paramPositiveName);
 
                     var zeroClip = aac.NewClip(param + "_0_scaled");
                     var oneClipParam1  = aac.NewClip(param + "_1_scaled");
                     var oneClipParam2 = aac.NewClip(param + "_2_scaled");
 
-                    var boolParamNegative = binaryCastLayer.BoolParameter(param + "Negative");
-                    var floatBoolParamNegative = binaryCastLayer.FloatParameter(param + "Negative_Float");
-
-                    if(isCombinedParam) 
-                    {
-                        binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
-                    }
-                    
                     foreach(string keyframeParam in decodeParams)
                     {
-                        var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
+                        var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
 
                         float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
 
@@ -518,8 +537,8 @@ namespace Raz.VRCFTGenerator
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
                         var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
-                        var keyframePositive = binaryCastLayer.FloatParameter(keyframePositiveName);
-                        var keyframeNegative = binaryCastLayer.FloatParameter(keyframeNegativeName);
+                        var keyframePositive = binaryCastLayer.FloatParameter(SystemPrefix + keyframePositiveName);
+                        var keyframeNegative = binaryCastLayer.FloatParameter(SystemPrefix + keyframeNegativeName);
 
                         zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
@@ -543,7 +562,7 @@ namespace Raz.VRCFTGenerator
                         string p = param+binarySuffix.ToString();
 
                         var boolParam = binaryCastLayer.BoolParameter(p);
-                        var floatBoolParam = binaryCastLayer.FloatParameter(p + "_Float");
+                        var floatBoolParam = binaryCastLayer.FloatParameter(SystemPrefix + p + "_Float");
 
                         binaryCastState.DrivingCasts(boolParam, 0f, 1f, floatBoolParam, 0f, 0.5f * Mathf.Pow(2,j+1) * 1f/(Mathf.Pow(2,(float)paramBits) - 1f));
 
@@ -561,6 +580,10 @@ namespace Raz.VRCFTGenerator
 
                     if (isCombinedParam)
                     {
+                        var boolParamNegative = binaryCastLayer.BoolParameter(param + "Negative");
+                        var floatBoolParamNegative = binaryCastLayer.FloatParameter(SystemPrefix + param + "Negative_Float");
+                        binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
+
                         var combinedTree = CreateFactorTree(floatBoolParamNegative, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative);
                         childMotion = combinedTree;
                     } else {
@@ -578,7 +601,7 @@ namespace Raz.VRCFTGenerator
 
                     foreach(string keyframeParam in decodeParams)
                     {
-                        var paramToAnimate = decodeLayer.FloatParameter(keyframeParam);
+                        var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
 
                         float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
 
@@ -586,8 +609,8 @@ namespace Raz.VRCFTGenerator
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
                         var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
-                        var keyframePositive = binaryCastLayer.FloatParameter(keyframePositiveName);
-                        var keyframeNegative = binaryCastLayer.FloatParameter(keyframeNegativeName);
+                        var keyframePositive = binaryCastLayer.FloatParameter(SystemPrefix + keyframePositiveName);
+                        var keyframeNegative = binaryCastLayer.FloatParameter(SystemPrefix + keyframeNegativeName);
 
                         zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
@@ -608,31 +631,35 @@ namespace Raz.VRCFTGenerator
             {
                 var smoothingLayer = aac.CreateSupportingFxLayer("SmoothingDriving"); // Adds or Overwrites
 
-                var smoothingFactorParameter = fx.FloatParameter(SystemName + "__" + "SmoothingAlpha");
+                var smoothingFactorParameter = fx.FloatParameter(SystemPrefix + "SmoothingAlpha");
                 fx.OverrideValue(smoothingFactorParameter, my.remoteSmoothingTimeConstant);
 
-                var faceTrackingToggle = fx.BoolParameter("FaceTracking");
                 fx.OverrideValue(faceTrackingToggle, true);
 
                 int numDirectStates = smoothingParams.Count;
 
                 // Need to normalize all direct blendtree weights to sum to 1
-                var directNormalizer = fx.FloatParameter(SystemName + "__" + "SmoothingDrivingTreeNormalizer");
+                var directNormalizer = fx.FloatParameter(SystemPrefix + "SmoothingDrivingTreeNormalizer");
                 fx.OverrideValue(directNormalizer, 1/(float)numDirectStates);
 
                 List<ChildMotion> smoothingChildMotions = new List<ChildMotion>();
 
                 foreach (string parameterToSmooth in smoothingParams)
                 {
-                    var parameter = fx.FloatParameter(parameterToSmooth);
-                    var smoothedParameter = fx.FloatParameter(parameterToSmooth + "_Smoothed");
+                    string parameterNameToSmooth = parameterToSmooth;
+                    if(!directFloatParamsNoPrefix.Contains(parameterToSmooth))
+                    {
+                        parameterNameToSmooth = SystemPrefix + parameterNameToSmooth;
+                    }
+                    var parameter = fx.FloatParameter(parameterNameToSmooth);
+                    var smoothedParameter = fx.FloatParameter(SystemPrefix + parameterToSmooth + "_Smoothed");
 
                     var zeroClip = aac.NewClip(parameterToSmooth + "param_0_scaled");
                     var oneClip  = aac.NewClip(parameterToSmooth + "param_1_scaled");
 
                     foreach(string paramName in smoothingParams)
                     {
-                        var paramNameSmoothed = fx.FloatParameter(paramName + "_Smoothed");
+                        var paramNameSmoothed = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
 
                         float driveVal = paramName == parameterToSmooth ? 1f*(float)numDirectStates : 0f;
                         zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
@@ -671,7 +698,7 @@ namespace Raz.VRCFTGenerator
 
                 foreach (string paramName in smoothingParams)
                 {
-                    var smoothedParameter = fx.FloatParameter(paramName + "_Smoothed");
+                    var smoothedParameter = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
                     ftDisabledClip.Animating(clip => clip.AnimatesAnimator(smoothedParameter).WithOneFrame(0f));
 
                     foreach (var target in my.blendshapeTargetMeshRenderers)
@@ -705,7 +732,7 @@ namespace Raz.VRCFTGenerator
 
         private void AddParametersToAvatar(VRCAvatarDescriptor avatar, Dictionary<string, VRCFTValues.ParamMode> parameters)
         {
-            VRCFTGenerator_ParameterUtility.AddParameter("FaceTracking", VRCExpressionParameters.ValueType.Bool, true, true, avatar);
+            VRCFTGenerator_ParameterUtility.AddParameter(FaceTrackingToggleParameter, VRCExpressionParameters.ValueType.Bool, true, true, avatar);
 
             foreach (var param in parameters)
             {
