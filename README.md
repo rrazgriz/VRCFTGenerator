@@ -3,13 +3,15 @@
 > Generate VRChat systems for animating facial blendshapes that use Direct Blend Trees, with a fixed amount of layers to drive an unlimited amount of blendshapes with complex parameter configurations.
 > Licensed as MIT.
 
+🛑 **Warning**: The configurations generated do *not* appear to be stable with Write Defaults OFF when added to animators with more complex systems. Please only use it with WD On, and note that this means the normalization is not necessary, but will not affect the workings of the system. You can leave the layers as WD On regardless of the other layers' WD settings.
+
 Please see the VRCFT wiki for more information on [Blendshapes](https://github.com/benaclejames/VRCFaceTracking/wiki/Blend-Shapes-Setup) and [Parameter Setup](https://github.com/benaclejames/VRCFaceTracking/wiki/Parameters).
 
 ![M7HZqf71Ua](https://user-images.githubusercontent.com/47901762/182271879-e2adf52c-196f-4381-9848-98d6d03c82c7.png)
 
-🛑 **This tool is not intended to be plug-and-play**, I built it for my own reference and as a direct blendtree study, with help from Lyuma and Hai. I am releasing it as-is for others to reference, study, and maybe use. The code quality is not particularly good, and may contain bad practices, unused code, and be difficult to read.
+⚠**This tool is not intended to be plug-and-play**, I built it for my own reference and as a direct blendtree study, with help from Lyuma and Hai. I am releasing it as-is for others to reference, study, and maybe use. The code quality is not particularly good, and may contain bad practices, unused code, and be difficult to read.
 
-⚠ **Please take note**: this tool relies on having a version of Animator As Code that supports VRC parameter driver copy behavior. A version of the framework is included with this functionality added. When AAC is updated to support this, you can remove the "Framework" folder and use the main Animator As Code release from https://github.com/hai-vr/av3-animator-as-code. I will try to remember to remove this folder (and update the code, if necessary) once that change is merged.
+ **Please take note**: this tool relies on having a version of Animator As Code that supports VRC parameter driver copy behavior. A version of the framework is included with this functionality added. When AAC is updated to support this, you can remove the "Framework" folder and use the main Animator As Code release from https://github.com/hai-vr/av3-animator-as-code. I will try to remember to remove this folder (and update the code, if necessary) once that change is merged.
 
 ### Changelog
 
@@ -48,15 +50,15 @@ This tool uses direct blend trees to convert boolean-encoded decimals ([Binary P
   - Smooths the decoded parameters using discrete exponential smoothing
   - Drives blendshapes based on the smoothed values
 
-There are a number of rules that have to be followed for these direct blend trees to work correctly with Write Defaults On or Off:
+~~There are a number of rules that have to be followed for these direct blend trees to work correctly with Write Defaults On or Off:~~
 
-- Direct Blendtree Motions should not have an animation as a first-level child motion - another blend tree (1d, 2d, or direct) should be used instead.
-- At the top level of the direct blendtree, a single normalizing parameter is used, with a value of `1/numberOfChildren` (for a 20-child blendtree, this would be `1/20 = 0.05`). This normalizes the blendtree's outputs correctly.
-  - In blendtrees that are not the top level direct blendtrees (even direct ones), this value needs to be 1.0 instead.
-  - Child motions can nest blendtrees as deep as is needed.
-- Output animations (at the end of the blendtrees) need to have their keyframe values scaled by a factor of the number of children at the top level blendtree. For a 20-child blendtree, output animator parameters would need to be scaled to `20` instead of `1`, and blendshapes would need to be `2000` instead of `100`. Zero is unaffected.
+~~- Direct Blendtree Motions should not have an animation as a first-level child motion - another blend tree (1d, 2d, or direct) should be used instead.~~
+~~- At the top level of the direct blendtree, a single normalizing parameter is used, with a value of `1/numberOfChildren` (for a 20-child blendtree, this would be `1/20 = 0.05`). This normalizes the blendtree's outputs correctly.~~
+  ~~- In blendtrees that are not the top level direct blendtrees (even direct ones), this value needs to be 1.0 instead.~~
+  ~~- Child motions can nest blendtrees as deep as is needed.~~
+~~- Output animations (at the end of the blendtrees) need to have their keyframe values scaled by a factor of the number of children at the top level blendtree. For a 20-child blendtree, output animator parameters would need to be scaled to `20` instead of `1`, and blendshapes would need to be `2000` instead of `100`. Zero is unaffected.~~
 
-When these rules are followed, direct blend trees appear to work as expected whether Write Defaults is on or off. 
+~~When these rules are followed, direct blend trees appear to work as expected whether Write Defaults is on or off.~~ **Please note that this has been found to still interfere with other layers.**
 
 ## Extras
 
