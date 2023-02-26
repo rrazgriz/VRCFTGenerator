@@ -507,7 +507,8 @@ namespace Raz.VRCFTGenerator
                 var decodeLayer = aac.CreateSupportingFxLayer("BinaryCombinedDecode");
                 var binarySumState = decodeLayer.NewState("DecodeBlendTree");
                 var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter(SystemPrefix + "DecodeBlendTreeNormalizer");
-                decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, 1f/(float)decodeBlendtreeChildren);
+                float binarySumTopLevelNormalizerValue = my.writeDefaults ? 1f : 1f/(float)decodeBlendtreeChildren;
+                decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, binarySumTopLevelNormalizerValue);
 
                 var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(SystemPrefix + "Constant_1");
                 fx.OverrideValue(parameterDirectTreeNormalizer, 1f);
@@ -531,7 +532,7 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
 
-                        float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
+                        float oneClipVal = keyframeParam == param ? (my.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
@@ -640,7 +641,8 @@ namespace Raz.VRCFTGenerator
 
                 // Need to normalize all direct blendtree weights to sum to 1
                 var directNormalizer = fx.FloatParameter(SystemPrefix + "SmoothingDrivingTreeNormalizer");
-                fx.OverrideValue(directNormalizer, 1/(float)numDirectStates);
+                float directNormalizerValue = my.writeDefaults ? 1f : 1f/(float)numDirectStates;
+                fx.OverrideValue(directNormalizer, directNormalizerValue);
 
                 List<ChildMotion> smoothingChildMotions = new List<ChildMotion>();
 
@@ -661,7 +663,7 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramNameSmoothed = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
 
-                        float driveVal = paramName == parameterToSmooth ? 1f*(float)numDirectStates : 0f;
+                        float driveVal = paramName == parameterToSmooth ? (my.writeDefaults ? 1 : 1f*(float)numDirectStates) : 0f;
                         zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
                         oneClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(driveVal));
                         
