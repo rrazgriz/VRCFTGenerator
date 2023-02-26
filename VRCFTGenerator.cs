@@ -533,6 +533,9 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
 
+                        if(my.writeDefaults && keyframeParam != param)
+                            continue;
+
                         float oneClipVal = keyframeParam == param ? (my.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
@@ -605,6 +608,9 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
 
+                        if(my.writeDefaults && keyframeParam != param)
+                            continue;
+
                         float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
@@ -663,6 +669,9 @@ namespace Raz.VRCFTGenerator
                     foreach(string paramName in smoothingParams)
                     {
                         var paramNameSmoothed = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
+
+                        if(my.writeDefaults && paramName != parameterToSmooth)
+                            continue;
 
                         float driveVal = paramName == parameterToSmooth ? (my.writeDefaults ? 1 : 1f*(float)numDirectStates) : 0f;
                         zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
