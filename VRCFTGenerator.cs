@@ -24,7 +24,8 @@ namespace Raz.VRCFTGenerator
         public VRCAvatarDescriptor avatar;
         public AnimatorController assetContainer;
         public string assetKey;
-        public bool writeDefaults = false;
+        [Header("This will change how the controller is generated. Recommended to keep on, regardless of rest of controller.")]
+        public bool writeDefaults = true;
         public bool removeAnimatorParams = true;
         public bool manageExpressionParameters = true;
 
