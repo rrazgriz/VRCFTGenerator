@@ -494,6 +494,8 @@ namespace Raz.VRCFTGenerator
                 }
             }
 
+            var parameterConstant1 = fx.FloatParameter(SystemPrefix + "Constant_1");
+            fx.OverrideValue(parameterConstant1, 1f);
             
             decodeParams = selectedFloatDecodeParams.Concat(selectedBinaryDecodeParams).ToList();
 
@@ -507,13 +509,18 @@ namespace Raz.VRCFTGenerator
 
                 var decodeLayer = aac.CreateSupportingFxLayer("BinaryCombinedDecode");
                 var binarySumState = decodeLayer.NewState("DecodeBlendTree");
-                var binarySumTopLevelNormalizerParam = decodeLayer.FloatParameter(SystemPrefix + "DecodeBlendTreeNormalizer");
-                float binarySumTopLevelNormalizerValue = my.writeDefaults ? 1f : 1f/(float)decodeBlendtreeChildren;
-                decodeLayer.OverrideValue(binarySumTopLevelNormalizerParam, binarySumTopLevelNormalizerValue);
 
-                var parameterDirectTreeNormalizer = decodeLayer.FloatParameter(SystemPrefix + "Constant_1");
-                fx.OverrideValue(parameterDirectTreeNormalizer, 1f);
-                binaryCastState.Drives(parameterDirectTreeNormalizer, 1f);
+                AacFlFloatParameter binarySumTopLevelNormalizerParam;
+
+                if(my.writeDefaults)
+                {
+                    binarySumTopLevelNormalizerParam = parameterConstant1;
+                }
+                else
+                {
+                    binarySumTopLevelNormalizerParam = fx.FloatParameter(SystemPrefix + "DecodeBlendTreeNormalizer");
+                    fx.OverrideValue(binarySumTopLevelNormalizerParam, 1f/(float)decodeBlendtreeChildren);
+                }
 
                 List<ChildMotion> binarySumTopLevelChildMotions = new List<ChildMotion>();
 
@@ -523,7 +530,7 @@ namespace Raz.VRCFTGenerator
                     bool isCombinedParam = VRCFTValues.CombinedMapping.ContainsKey(param);
                     string paramPositiveName = isCombinedParam ? VRCFTValues.CombinedMapping[param][0] : param;
 
-                    var paramPositive = binaryCastLayer.FloatParameter(SystemPrefix + paramPositiveName);
+                    var paramPositive = fx.FloatParameter(SystemPrefix + paramPositiveName);
 
                     var zeroClip = aac.NewClip(param + "_0_scaled");
                     var oneClipParam1  = aac.NewClip(param + "_1_scaled");
@@ -531,7 +538,7 @@ namespace Raz.VRCFTGenerator
 
                     foreach(string keyframeParam in decodeParams)
                     {
-                        var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
+                        var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
 
                         if(my.writeDefaults && keyframeParam != param)
                             continue;
@@ -542,8 +549,8 @@ namespace Raz.VRCFTGenerator
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
                         var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
-                        var keyframePositive = binaryCastLayer.FloatParameter(SystemPrefix + keyframePositiveName);
-                        var keyframeNegative = binaryCastLayer.FloatParameter(SystemPrefix + keyframeNegativeName);
+                        var keyframePositive = fx.FloatParameter(SystemPrefix + keyframePositiveName);
+                        var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
 
                         zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
@@ -566,8 +573,8 @@ namespace Raz.VRCFTGenerator
                         int binarySuffix = (int)Mathf.Pow(2, j);
                         string p = param+binarySuffix.ToString();
 
-                        var boolParam = binaryCastLayer.BoolParameter(p);
-                        var floatBoolParam = binaryCastLayer.FloatParameter(SystemPrefix + p + "_Float");
+                        var boolParam = fx.BoolParameter(p);
+                        var floatBoolParam = fx.FloatParameter(SystemPrefix + p + "_Float");
 
                         binaryCastState.DrivingCasts(boolParam, 0f, 1f, floatBoolParam, 0f, 0.5f * Mathf.Pow(2,j+1) * 1f/(Mathf.Pow(2,(float)paramBits) - 1f));
 
@@ -576,17 +583,17 @@ namespace Raz.VRCFTGenerator
 
                         binarySumChildBlendTreesPositive[j] = positiveTree;
                         binarySumChildBlendTreesNegative[j] = negativeTree;
-                        binarySumChildBlendTreesBlendParams[j] = parameterDirectTreeNormalizer;
+                        binarySumChildBlendTreesBlendParams[j] = parameterConstant1;
                     }
                     
                     BlendTree childMotion;
-                    BlendTree parameterDirectBlendTreePositive = CreateDirectTree(decodeLayer, parameterDirectTreeNormalizer, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesPositive);
-                    BlendTree parameterDirectBlendTreeNegative = CreateDirectTree(decodeLayer, parameterDirectTreeNormalizer, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesNegative);
+                    BlendTree parameterDirectBlendTreePositive = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesPositive);
+                    BlendTree parameterDirectBlendTreeNegative = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesNegative);
 
                     if (isCombinedParam)
                     {
-                        var boolParamNegative = binaryCastLayer.BoolParameter(param + "Negative");
-                        var floatBoolParamNegative = binaryCastLayer.FloatParameter(SystemPrefix + param + "Negative_Float");
+                        var boolParamNegative = fx.BoolParameter(param + "Negative");
+                        var floatBoolParamNegative = fx.FloatParameter(SystemPrefix + param + "Negative_Float");
                         binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
 
                         var combinedTree = CreateFactorTree(floatBoolParamNegative, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative);
@@ -606,7 +613,7 @@ namespace Raz.VRCFTGenerator
 
                     foreach(string keyframeParam in decodeParams)
                     {
-                        var paramToAnimate = decodeLayer.FloatParameter(SystemPrefix + keyframeParam);
+                        var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
 
                         if(my.writeDefaults && keyframeParam != param)
                             continue;
@@ -617,15 +624,15 @@ namespace Raz.VRCFTGenerator
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
                         var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
 
-                        var keyframePositive = binaryCastLayer.FloatParameter(SystemPrefix + keyframePositiveName);
-                        var keyframeNegative = binaryCastLayer.FloatParameter(SystemPrefix + keyframeNegativeName);
+                        var keyframePositive = fx.FloatParameter(SystemPrefix + keyframePositiveName);
+                        var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
 
                         zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
                         minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
                     }
 
-                    BlendTree childMotion = CreateCombinedTree(decodeLayer.FloatParameter(param), minusClip, zeroClip, oneClip);
+                    BlendTree childMotion = CreateCombinedTree(fx.FloatParameter(param), minusClip, zeroClip, oneClip);
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
                 }
 
@@ -646,10 +653,18 @@ namespace Raz.VRCFTGenerator
 
                 int numDirectStates = smoothingParams.Count;
 
-                // Need to normalize all direct blendtree weights to sum to 1
-                var directNormalizer = fx.FloatParameter(SystemPrefix + "SmoothingDrivingTreeNormalizer");
-                float directNormalizerValue = my.writeDefaults ? 1f : 1f/(float)numDirectStates;
-                fx.OverrideValue(directNormalizer, directNormalizerValue);
+                AacFlFloatParameter directNormalizer;
+
+                if(my.writeDefaults)
+                {
+                    directNormalizer = parameterConstant1;
+                }
+                else
+                {
+                    directNormalizer = fx.FloatParameter(SystemPrefix + "SmoothingDrivingTreeNormalizer");
+                    float directNormalizerValue = my.writeDefaults ? 1f : 1f/(float)numDirectStates;
+                    fx.OverrideValue(directNormalizer, directNormalizerValue);
+                }
 
                 List<ChildMotion> smoothingChildMotions = new List<ChildMotion>();
 
