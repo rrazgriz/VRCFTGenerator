@@ -618,7 +618,7 @@ namespace Raz.VRCFTGenerator
                         if(my.writeDefaults && keyframeParam != param)
                             continue;
 
-                        float oneClipVal = keyframeParam == param ? 1f*(float)decodeBlendtreeChildren : 0f;
+                        float oneClipVal = keyframeParam == param ? (my.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
