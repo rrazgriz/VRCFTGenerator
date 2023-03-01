@@ -11,12 +11,11 @@ Please see the VRCFT wiki for more information on [Blendshapes](https://github.c
 
 ⚠**This tool is not intended to be plug-and-play**, I built it for my own reference and as a direct blendtree study, with help from Lyuma and Hai. I am releasing it as-is for others to reference, study, and maybe use. The code quality is not particularly good, and may contain bad practices, unused code, and be difficult to read.
 
- **Please take note**: this tool relies on having a version of Animator As Code that supports VRC parameter driver copy behavior. A version of the framework is included with this functionality added. When AAC is updated to support this, you can remove the "Framework" folder and use the main Animator As Code release from https://github.com/hai-vr/av3-animator-as-code. I will try to remember to remove this folder (and update the code, if necessary) once that change is merged.
-
 ### Changelog
 
 - 2022-08-12: Improved code quality, removed redundant code, added setup verification (will not generate if duplicate params/shapes are present), won't create cast/decode layer if unneeded, won't create unnecessary decode entries, fixed Direct/Averaged Parameters
 - 2022-08-18: Automatically add/remove parameters from VRChat SDK Parameters Object
+- 2023-02-28: Change to WD ON, add support for implicit parameter casting (use [GestureManager](https://github.com/BlackStartx/VRC-Gesture-Manager) or [this Av3Emulator fork](https://github.com/jellejurre/Av3Emulator)), UI improvements, and more
 
 ### Improvements To Make
 
