@@ -512,10 +512,15 @@ namespace Raz.VRCFTGenerator
             {
                 var binaryCastLayer = aac.CreateSupportingFxLayer("BinaryCast");
                 var binaryCastState = binaryCastLayer.NewState("Cast");
-                binaryCastState.TransitionsTo(binaryCastState).AfterAnimationIsAtLeastAtPercent(0f).WithTransitionToSelf(); // re-evaluate every frame
+                binaryCastState.TransitionsTo(binaryCastState).AfterAnimationIsAtLeastAtPercent(0f).WithTransitionToSelf().When(faceTrackingToggle.IsTrue()); // re-evaluate every frame
 
                 var decodeLayer = aac.CreateSupportingFxLayer("Decode");
-                var binarySumState = decodeLayer.NewState("DecodeBlendTree");
+                var ftDisabledClip = aac.NewClip("FaceTracking_Off");
+                var offState = decodeLayer.NewState("FaceTracking_Off").WithAnimation(ftDisabledClip);
+                var decodeState = decodeLayer.NewState("Decode");
+
+                offState.TransitionsTo(decodeState).When(faceTrackingToggle.IsTrue());
+                decodeState.TransitionsTo(offState).When(faceTrackingToggle.IsFalse());
 
                 AacFlFloatParameter binarySumTopLevelNormalizerParam;
 
@@ -578,11 +583,15 @@ namespace Raz.VRCFTGenerator
                             oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
                             oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
 
+                            ftDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+
                             if(keyframeParamIsCombined)
                             {
                                 zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                                 oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                                 oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+
+                                ftDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                             }
 
                             zeroClips[j] = zeroClip;
@@ -656,6 +665,9 @@ namespace Raz.VRCFTGenerator
                         zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                         oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
                         minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+
+                        ftDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                        ftDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                     }
 
                     BlendTree childMotion = CreateCombinedTree(fx.FloatParameter(param), minusClip, zeroClip, oneClip);
@@ -663,7 +675,7 @@ namespace Raz.VRCFTGenerator
                 }
 
                 var binarySumTopLevelDirectBlendTree = CreateDirectTree(decodeLayer, binarySumTopLevelNormalizerParam, binarySumTopLevelChildMotions.ToArray());
-                binarySumState.WithAnimation(binarySumTopLevelDirectBlendTree);
+                decodeState.WithAnimation(binarySumTopLevelDirectBlendTree);
 
                 if(generator.useImplicitParameterCasting)
                 {
@@ -750,9 +762,12 @@ namespace Raz.VRCFTGenerator
                 var smoothingDirectBlendTree = aac.NewBlendTreeAsRaw();
                 smoothingDirectBlendTree = CreateDirectTree(smoothingLayer, directNormalizer, smoothingChildMotions.ToArray());
 
-                var smoothingState = smoothingLayer.NewState("Smoothing").WithAnimation(smoothingDirectBlendTree);
                 var ftDisabledClip = aac.NewClip("FaceTracking_Off");
                 var offState = smoothingLayer.NewState("FaceTracking_Off").WithAnimation(ftDisabledClip);
+                var smoothingState = smoothingLayer.NewState("Smoothing").WithAnimation(smoothingDirectBlendTree);
+
+                offState.TransitionsTo(smoothingState).When(faceTrackingToggle.IsTrue());
+                smoothingState.TransitionsTo(offState).When(faceTrackingToggle.IsFalse());
 
                 foreach (string paramName in smoothingParams)
                 {
@@ -773,9 +788,6 @@ namespace Raz.VRCFTGenerator
                         }
                     }
                 }
-
-                smoothingState.TransitionsTo(offState).When(faceTrackingToggle.IsFalse());
-                offState.TransitionsTo(smoothingState).When(faceTrackingToggle.IsTrue());
             }
 
             aac.RemoveAllMainLayers();
