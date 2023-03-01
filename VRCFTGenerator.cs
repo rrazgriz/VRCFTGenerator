@@ -26,6 +26,8 @@ namespace Raz.VRCFTGenerator
         public string assetKey;
         [Header("This will change how the controller is generated. Recommended to keep on, regardless of rest of controller.")]
         public bool writeDefaults = true;
+        [Header("[Experimental] Instead of using an explicit cast state, implicitly cast expression Bool -> Animator Float")]
+        public bool useImplicitParameterCasting = false;
         public bool removeAnimatorParams = true;
         public bool manageExpressionParameters = true;
 
@@ -470,8 +472,10 @@ namespace Raz.VRCFTGenerator
                     for (int j = 0; j < paramBits; j++)
                     {
                         int binarySuffix = (int)Mathf.Pow(2, j);
-                        string p = param + binarySuffix.ToString();
-                        fx.BoolParameter(p);
+                        if(generator.useImplicitParameterCasting)
+                            fx.FloatParameter(param + binarySuffix.ToString());
+                        else
+                            fx.BoolParameter(param + binarySuffix.ToString());
                     }
                     
                     if(isParamCombined)
@@ -479,7 +483,10 @@ namespace Raz.VRCFTGenerator
                         // Extra bit for negative flag bool
                         parameterMemoryCost++;
 
-                        fx.BoolParameter(param + "Negative");
+                        if(generator.useImplicitParameterCasting)
+                            fx.FloatParameter(param + "Negative");
+                        else
+                            fx.BoolParameter(param + "Negative");
                     }
 
                     selectedBinaryDecodeParams.Add(param);
@@ -507,7 +514,7 @@ namespace Raz.VRCFTGenerator
                 var binaryCastState = binaryCastLayer.NewState("Cast");
                 binaryCastState.TransitionsTo(binaryCastState).AfterAnimationIsAtLeastAtPercent(0f).WithTransitionToSelf(); // re-evaluate every frame
 
-                var decodeLayer = aac.CreateSupportingFxLayer("BinaryCombinedDecode");
+                var decodeLayer = aac.CreateSupportingFxLayer("Decode");
                 var binarySumState = decodeLayer.NewState("DecodeBlendTree");
 
                 AacFlFloatParameter binarySumTopLevelNormalizerParam;
@@ -583,13 +590,17 @@ namespace Raz.VRCFTGenerator
                             oneClipsParam2[j] = oneClipParam2;
                         }
 
-                        var boolParam = fx.BoolParameter(p);
-                        var floatBoolParam = fx.FloatParameter(SystemPrefix + p + "_Float");
+                        string boolParamAsFloatName = generator.useImplicitParameterCasting ? param + binarySuffix.ToString() : SystemPrefix + param + binarySuffix.ToString() + "_Float";
+                        var boolParamAsFloat = fx.FloatParameter(boolParamAsFloatName);
 
-                        binaryCastState.DrivingCasts(boolParam, 0f, 1f, floatBoolParam, 0f, 1f);
+                        if(!generator.useImplicitParameterCasting)
+                        {
+                            var boolParam = fx.BoolParameter(param + binarySuffix.ToString());
+                            binaryCastState.DrivingCasts(boolParam, 0f, 1f, boolParamAsFloat, 0f, 1f);
+                        }
 
-                        var positiveTree = CreateProxyTree(floatBoolParam, zeroClips[j], oneClipsParam1[j]);
-                        var negativeTree = CreateProxyTree(floatBoolParam, zeroClips[j], oneClipsParam2[j]);
+                        var positiveTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam1[j]);
+                        var negativeTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam2[j]);
 
                         binarySumChildBlendTreesPositive[j] = positiveTree;
                         binarySumChildBlendTreesNegative[j] = negativeTree;
@@ -602,11 +613,16 @@ namespace Raz.VRCFTGenerator
 
                     if (isCombinedParam)
                     {
-                        var boolParamNegative = fx.BoolParameter(param + "Negative");
-                        var floatBoolParamNegative = fx.FloatParameter(SystemPrefix + param + "Negative_Float");
-                        binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, floatBoolParamNegative, 0f, 1f);
+                        string boolParamNegativeAsFloatName = generator.useImplicitParameterCasting ? param : SystemPrefix + param + "_Float";
+                        var boolParamNegativeAsFloat = fx.FloatParameter(boolParamNegativeAsFloatName + "Negative");
 
-                        var combinedTree = CreateFactorTree(floatBoolParamNegative, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative);
+                        if(!generator.useImplicitParameterCasting)
+                        {
+                            var boolParamNegative = fx.BoolParameter(param + "Negative");
+                            binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, boolParamNegativeAsFloat, 0f, 1f);
+                        }
+
+                        var combinedTree = CreateFactorTree(boolParamNegativeAsFloat, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative);
                         childMotion = combinedTree;
                     } else {
                         childMotion = parameterDirectBlendTreePositive;
@@ -648,13 +664,18 @@ namespace Raz.VRCFTGenerator
 
                 var binarySumTopLevelDirectBlendTree = CreateDirectTree(decodeLayer, binarySumTopLevelNormalizerParam, binarySumTopLevelChildMotions.ToArray());
                 binarySumState.WithAnimation(binarySumTopLevelDirectBlendTree);
+
+                if(generator.useImplicitParameterCasting)
+                {
+                    aac.RemoveAllSupportingLayers("BinaryCast");
+                }
             }
             
 
             // Smoothing/Driving Layer
             if(smoothingParams.Count > 0)
             {
-                var smoothingLayer = aac.CreateSupportingFxLayer("SmoothingDriving"); // Adds or Overwrites
+                var smoothingLayer = aac.CreateSupportingFxLayer("SmoothAndDrive"); // Adds or Overwrites
 
                 var smoothingFactorParameter = fx.FloatParameter(SystemPrefix + "SmoothingAlpha");
                 fx.OverrideValue(smoothingFactorParameter, generator.remoteSmoothingTimeConstant);
