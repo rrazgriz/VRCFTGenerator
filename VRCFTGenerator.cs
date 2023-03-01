@@ -532,37 +532,9 @@ namespace Raz.VRCFTGenerator
 
                     var paramPositive = fx.FloatParameter(SystemPrefix + paramPositiveName);
 
-                    var zeroClip = aac.NewClip(param + "_0_scaled");
-                    var oneClipParam1  = aac.NewClip(param + "_1_scaled");
-                    var oneClipParam2 = aac.NewClip(param + "_2_scaled");
-
-                    foreach(string keyframeParam in decodeParams)
-                    {
-                        var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
-
-                        if(generator.writeDefaults && keyframeParam != param)
-                            continue;
-
-                        float oneClipVal = keyframeParam == param ? (generator.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
-
-                        bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
-                        var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
-                        var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
-
-                        var keyframePositive = fx.FloatParameter(SystemPrefix + keyframePositiveName);
-                        var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
-
-                        zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                        oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
-                        oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-
-                        if(keyframeParamIsCombined)
-                        {
-                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-                            oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-                            oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
-                        }
-                    }
+                    AacFlClip[] zeroClips = new AacFlClip[paramBits];
+                    AacFlClip[] oneClipsParam1 = new AacFlClip[paramBits];
+                    AacFlClip[] oneClipsParam2 = new AacFlClip[paramBits];
 
                     BlendTree[] binarySumChildBlendTreesPositive = new BlendTree[paramBits];
                     BlendTree[] binarySumChildBlendTreesNegative = new BlendTree[paramBits];
@@ -571,15 +543,53 @@ namespace Raz.VRCFTGenerator
                     for (int j = 0; j < paramBits; j++)
                     {
                         int binarySuffix = (int)Mathf.Pow(2, j);
-                        string p = param+binarySuffix.ToString();
+                        float binaryContribution = 0.5f * Mathf.Pow(2, j+1) * 1f/(Mathf.Pow(2, (float)paramBits) - 1f);
+                        string p = param + binarySuffix.ToString();
+
+                        foreach(string keyframeParam in decodeParams)
+                        {
+                            var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
+
+                            if(generator.writeDefaults && keyframeParam != param)
+                                continue;
+
+                            float oneClipVal = keyframeParam == param ? binaryContribution : 0f;
+                            oneClipVal *= (generator.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren);
+
+                            bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
+                            var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
+                            var keyframeNegativeName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][1] : keyframeParam;
+
+                            var keyframePositive = fx.FloatParameter(SystemPrefix + keyframePositiveName);
+                            var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
+
+                            var zeroClip = aac.NewClip(param + "_0_b" + binarySuffix);
+                            var oneClipParam1  = aac.NewClip(param + "_1_b" + binarySuffix);
+                            var oneClipParam2 = aac.NewClip(param + "_2_b" + binarySuffix);
+
+                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                            oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+
+                            if(keyframeParamIsCombined)
+                            {
+                                zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+                            }
+
+                            zeroClips[j] = zeroClip;
+                            oneClipsParam1[j] = oneClipParam1;
+                            oneClipsParam2[j] = oneClipParam2;
+                        }
 
                         var boolParam = fx.BoolParameter(p);
                         var floatBoolParam = fx.FloatParameter(SystemPrefix + p + "_Float");
 
-                        binaryCastState.DrivingCasts(boolParam, 0f, 1f, floatBoolParam, 0f, 0.5f * Mathf.Pow(2,j+1) * 1f/(Mathf.Pow(2,(float)paramBits) - 1f));
+                        binaryCastState.DrivingCasts(boolParam, 0f, 1f, floatBoolParam, 0f, 1f);
 
-                        var positiveTree = CreateProxyTree(floatBoolParam, zeroClip, oneClipParam1);
-                        var negativeTree = CreateProxyTree(floatBoolParam, zeroClip, oneClipParam2);
+                        var positiveTree = CreateProxyTree(floatBoolParam, zeroClips[j], oneClipsParam1[j]);
+                        var negativeTree = CreateProxyTree(floatBoolParam, zeroClips[j], oneClipsParam2[j]);
 
                         binarySumChildBlendTreesPositive[j] = positiveTree;
                         binarySumChildBlendTreesNegative[j] = negativeTree;
@@ -607,9 +617,9 @@ namespace Raz.VRCFTGenerator
 
                 foreach (string param in selectedFloatDecodeParams)
                 {
-                    var zeroClip  = aac.NewClip(param + "_0_scaled");
-                    var oneClip   = aac.NewClip(param + "_1_scaled");
-                    var minusClip = aac.NewClip(param + "_-1_scaled");
+                    var zeroClip  = aac.NewClip(param + "_0");
+                    var oneClip   = aac.NewClip(param + "_1");
+                    var minusClip = aac.NewClip(param + "_-1");
 
                     foreach(string keyframeParam in decodeParams)
                     {
