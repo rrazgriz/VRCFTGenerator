@@ -50,14 +50,14 @@ namespace Raz.VRCFTGenerator
         static Color darkgray = new Color(0.184f, 0.184f, 0.184f, 1.0f);
 
         private const string SystemName = "FT";
-        private VRCFTGenerator my;
+        private VRCFTGenerator generator;
         private AacFlBase aac;
 
         private void InitializeAAC()
         {
-            my = (VRCFTGenerator) target;
-            var wd = my.writeDefaults ? AACTemplate.Options().WriteDefaultsOn() : AACTemplate.Options().WriteDefaultsOff();
-            aac = AACTemplate.AnimatorAsCode(SystemName, my.avatar, my.assetContainer, my.assetKey, wd);
+            generator = (VRCFTGenerator) target;
+            var wd = generator.writeDefaults ? AACTemplate.Options().WriteDefaultsOn() : AACTemplate.Options().WriteDefaultsOff();
+            aac = AACTemplate.AnimatorAsCode(SystemName, generator.avatar, generator.assetContainer, generator.assetKey, wd);
         }
 
         // // // // // // // // // // // // // // // // // // // // // // // // // // // 
@@ -74,7 +74,7 @@ namespace Raz.VRCFTGenerator
             HashSet<string> shapesInUse = new HashSet<string>();
             int paramCost = 1; // One base for global FT toggle
 
-            foreach(var parameterSpec in my.paramsToAnimate)
+            foreach(var parameterSpec in generator.paramsToAnimate)
             {
                 paramCost += (int)parameterSpec.mode;
                 string paramName = parameterSpec.VRCFTParameter.ToString();
@@ -156,7 +156,7 @@ namespace Raz.VRCFTGenerator
 
         public override void OnInspectorGUI()
         {
-            my = (VRCFTGenerator) target;
+            generator = (VRCFTGenerator) target;
 
             serializedObject.Update();
             // Unity GUI Magic?
@@ -173,11 +173,11 @@ namespace Raz.VRCFTGenerator
 
             bool hasDuplicates = AnalyzeSetupGui();
 
-            bool noAvatar = my.avatar == null;
-            bool noContainer = my.assetContainer == null;
+            bool noAvatar = generator.avatar == null;
+            bool noContainer = generator.assetContainer == null;
             bool noFX = false;
             if(!noAvatar)
-                noFX = my.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController == null;
+                noFX = generator.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController == null;
 
             DrawUILine(darkgray);
 
@@ -245,7 +245,7 @@ namespace Raz.VRCFTGenerator
         private void RemoveFTBlendshapeController()
         {
             // Find FX Layer
-            AnimatorController fxLayer = (AnimatorController) my.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController;
+            AnimatorController fxLayer = (AnimatorController) generator.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController;
             aac.RemoveAllMainLayers();
 
             foreach(var layer in fxLayer.layers)
@@ -267,28 +267,28 @@ namespace Raz.VRCFTGenerator
 
             AnimatorControllerParameter[] fxParameters = fxLayer.parameters;
 
-            if (my.manageExpressionParameters)
+            if (generator.manageExpressionParameters)
             {
-                VRCExpressionParameters.Parameter[] expressionParameters = my.avatar.expressionParameters.parameters;
+                VRCExpressionParameters.Parameter[] expressionParameters = generator.avatar.expressionParameters.parameters;
 
                 foreach (VRCExpressionParameters.Parameter expressionParameter in expressionParameters)
                 {
                     if (expressionParameter.name.Contains(SystemPrefix) || expressionParameter.name == FaceTrackingToggleParameter)
                     {
-                        VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                        VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, generator.avatar);
                     }
 
                     foreach (string p in parameterNames)
                     {
                         if (expressionParameter.name.Contains(p))
                         {
-                            VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, my.avatar);
+                            VRCFTGenerator_ParameterUtility.RemoveParameter(expressionParameter.name, generator.avatar);
                         }
                     }
                 }
             }
 
-            if(my.removeAnimatorParams)
+            if(generator.removeAnimatorParams)
             {
                 int i = 0;
 
@@ -322,7 +322,7 @@ namespace Raz.VRCFTGenerator
 
             bool isValid = true;
 
-            foreach (ParamSpecifier specification in my.paramsToAnimate)
+            foreach (ParamSpecifier specification in generator.paramsToAnimate)
             {
                 if(!SelectedParameters.ContainsKey(specification.VRCFTParameter.ToString()))
                 {
@@ -440,7 +440,7 @@ namespace Raz.VRCFTGenerator
 
             var faceTrackingToggle = fx.BoolParameter(FaceTrackingToggleParameter);
 
-            foreach (ParamSpecifier specification in my.paramsToAnimate)
+            foreach (ParamSpecifier specification in generator.paramsToAnimate)
             {
                 SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
             }
@@ -512,7 +512,7 @@ namespace Raz.VRCFTGenerator
 
                 AacFlFloatParameter binarySumTopLevelNormalizerParam;
 
-                if(my.writeDefaults)
+                if(generator.writeDefaults)
                 {
                     binarySumTopLevelNormalizerParam = parameterConstant1;
                 }
@@ -540,10 +540,10 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
 
-                        if(my.writeDefaults && keyframeParam != param)
+                        if(generator.writeDefaults && keyframeParam != param)
                             continue;
 
-                        float oneClipVal = keyframeParam == param ? (my.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
+                        float oneClipVal = keyframeParam == param ? (generator.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
@@ -615,10 +615,10 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramToAnimate = fx.FloatParameter(SystemPrefix + keyframeParam);
 
-                        if(my.writeDefaults && keyframeParam != param)
+                        if(generator.writeDefaults && keyframeParam != param)
                             continue;
 
-                        float oneClipVal = keyframeParam == param ? (my.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
+                        float oneClipVal = keyframeParam == param ? (generator.writeDefaults ? 1f : 1f*(float)decodeBlendtreeChildren) : 0f;
 
                         bool keyframeParamIsCombined = VRCFTValues.CombinedMapping.ContainsKey(keyframeParam);
                         var keyframePositiveName = keyframeParamIsCombined ? VRCFTValues.CombinedMapping[keyframeParam][0] : keyframeParam;
@@ -647,7 +647,7 @@ namespace Raz.VRCFTGenerator
                 var smoothingLayer = aac.CreateSupportingFxLayer("SmoothingDriving"); // Adds or Overwrites
 
                 var smoothingFactorParameter = fx.FloatParameter(SystemPrefix + "SmoothingAlpha");
-                fx.OverrideValue(smoothingFactorParameter, my.remoteSmoothingTimeConstant);
+                fx.OverrideValue(smoothingFactorParameter, generator.remoteSmoothingTimeConstant);
 
                 fx.OverrideValue(faceTrackingToggle, true);
 
@@ -655,14 +655,14 @@ namespace Raz.VRCFTGenerator
 
                 AacFlFloatParameter directNormalizer;
 
-                if(my.writeDefaults)
+                if(generator.writeDefaults)
                 {
                     directNormalizer = parameterConstant1;
                 }
                 else
                 {
                     directNormalizer = fx.FloatParameter(SystemPrefix + "SmoothingDrivingTreeNormalizer");
-                    float directNormalizerValue = my.writeDefaults ? 1f : 1f/(float)numDirectStates;
+                    float directNormalizerValue = generator.writeDefaults ? 1f : 1f/(float)numDirectStates;
                     fx.OverrideValue(directNormalizer, directNormalizerValue);
                 }
 
@@ -685,14 +685,14 @@ namespace Raz.VRCFTGenerator
                     {
                         var paramNameSmoothed = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
 
-                        if(my.writeDefaults && paramName != parameterToSmooth)
+                        if(generator.writeDefaults && paramName != parameterToSmooth)
                             continue;
 
-                        float driveVal = paramName == parameterToSmooth ? (my.writeDefaults ? 1 : 1f*(float)numDirectStates) : 0f;
+                        float driveVal = paramName == parameterToSmooth ? (generator.writeDefaults ? 1 : 1f*(float)numDirectStates) : 0f;
                         zeroClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(0f));
                         oneClip.Animating(clip => clip.AnimatesAnimator(paramNameSmoothed).WithOneFrame(driveVal));
                         
-                        foreach (var target in my.blendshapeTargetMeshRenderers)
+                        foreach (var target in generator.blendshapeTargetMeshRenderers)
                         {
                             if(VRCFTValues.AveragedMapping.ContainsKey(paramName))
                             {
@@ -728,7 +728,7 @@ namespace Raz.VRCFTGenerator
                     var smoothedParameter = fx.FloatParameter(SystemPrefix + paramName + "_Smoothed");
                     ftDisabledClip.Animating(clip => clip.AnimatesAnimator(smoothedParameter).WithOneFrame(0f));
 
-                    foreach (var target in my.blendshapeTargetMeshRenderers)
+                    foreach (var target in generator.blendshapeTargetMeshRenderers)
                     {
                         if(VRCFTValues.AveragedMapping.ContainsKey(paramName))
                         {
@@ -748,9 +748,9 @@ namespace Raz.VRCFTGenerator
             }
 
             aac.RemoveAllMainLayers();
-            if (my.manageExpressionParameters)
+            if (generator.manageExpressionParameters)
             {
-                AddParametersToAvatar(my.avatar, SelectedParameters);
+                AddParametersToAvatar(generator.avatar, SelectedParameters);
             }
             
         }
@@ -859,7 +859,7 @@ namespace Raz.VRCFTGenerator
             AacFlFloatParameter smoothingFactorParameter = smoothingFactorParameterLayer.FloatParameter("FT_SmoothingAlpha");
 
             var IsLocal = smoothingFactorParameterLayer.BoolParameter("IsLocal"); // Only adds if not already present
-            smoothingFactorParameterLayer.OverrideValue(smoothingFactorParameter, my.remoteSmoothingTimeConstant); // Forces the value to init at remote value
+            smoothingFactorParameterLayer.OverrideValue(smoothingFactorParameter, generator.remoteSmoothingTimeConstant); // Forces the value to init at remote value
 
             var smoothingParameterNameRemote = "FT_SmoothingAlpha_Remote";
             var smoothingParameterNameLocal = "FT_SmoothingAlpha_Local";
@@ -867,8 +867,8 @@ namespace Raz.VRCFTGenerator
             var smoothingFactorParameterRemote = smoothingFactorParameterLayer.FloatParameter(smoothingParameterNameRemote);
             var smoothingFactorParameterLocal  = smoothingFactorParameterLayer.FloatParameter(smoothingParameterNameLocal);
 
-            float tauRemote = my.remoteSmoothingTimeConstant;
-            float tauLocal  = my.remoteSmoothingTimeConstant;// my.localSmoothingTimeConstant;
+            float tauRemote = generator.remoteSmoothingTimeConstant;
+            float tauLocal  = generator.remoteSmoothingTimeConstant;// my.localSmoothingTimeConstant;
 
             float keyframeTime = 0f;
             Keyframe[] smoothingParamKeyframesRemote = new Keyframe[61];
