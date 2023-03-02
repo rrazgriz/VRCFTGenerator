@@ -43,16 +43,6 @@ namespace Raz.VRCFTGenerator
     [CustomEditor(typeof(VRCFTGenerator), true)]
     public class VRCFTGeneratorEditor : Editor
     {
-        public static void DrawUILine(Color color, int thickness = 2, int padding = 8)
-        {
-            Rect r = EditorGUILayout.GetControlRect(GUILayout.Height(padding+thickness));
-            r.height = thickness;
-            r.y+=padding/2;
-            r.x-=2;
-            EditorGUI.DrawRect(r, color);
-        }
-        static Color darkgray = new Color(0.184f, 0.184f, 0.184f, 1.0f);
-
         private const string SystemName = "FT";
         private VRCFTGenerator generator;
         private AacFlBase aac;
@@ -66,8 +56,19 @@ namespace Raz.VRCFTGenerator
 
         // // // // // // // // // // // // // // // // // // // // // // // // // // // 
 
-        private bool paramListFoldout = true;
-        private bool paramCoverageFoldout = true;
+        public static void DrawUILine(Color color, int thickness = 2, int padding = 8)
+        {
+            Rect r = EditorGUILayout.GetControlRect(GUILayout.Height(padding+thickness));
+            r.height = thickness;
+            r.y+=padding/2;
+            r.x-=2;
+            EditorGUI.DrawRect(r, color);
+        }
+        public static void DrawUILine(int thickness = 2, int padding = 8) => DrawUILine(darkgray, thickness, padding);
+        static Color darkgray = new Color(0.184f, 0.184f, 0.184f, 1.0f);
+
+        private bool paramListFoldout = false;
+        private bool paramCoverageFoldout = false;
 
         private bool AnalyzeSetupGui()
         {
@@ -151,7 +152,7 @@ namespace Raz.VRCFTGenerator
 
             EditorGUILayout.EndFoldoutHeaderGroup();
 
-            DrawUILine(darkgray);
+            DrawUILine();
             EditorGUILayout.LabelField($"Shapes used: {usedShapes}/{availableShapes} ({coveragePercent.ToString("0")}%)");
             EditorGUILayout.LabelField($"Parameter Cost: {paramCost} bits");
 
@@ -173,7 +174,7 @@ namespace Raz.VRCFTGenerator
 
             this.DrawDefaultInspector();
 
-            DrawUILine(darkgray);
+            DrawUILine();
 
             bool hasDuplicates = AnalyzeSetupGui();
 
@@ -183,7 +184,7 @@ namespace Raz.VRCFTGenerator
             if(!noAvatar)
                 noFX = generator.avatar.baseAnimationLayers.First(it => it.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController == null;
 
-            DrawUILine(darkgray);
+            DrawUILine();
 
             if(noAvatar)
                 EditorGUILayout.HelpBox("No avatar descriptor specified. Please provide an avatar descriptor.", MessageType.Error);
@@ -213,33 +214,22 @@ namespace Raz.VRCFTGenerator
             private set {}
         }
 
-        internal string FaceTrackingToggleParameter
-        {
-            get => "FaceTracking";
-            private set {}
-        }
+        const string FaceTrackingToggleParameter = "FaceTracking";
 
         private void AddFeatures()
         {
             InitializeAAC();
-            int cost = ValidateFTSetup();
-            if(cost > 0)
+            if(EditorUtility.DisplayDialog("VRCFTGenerator: Add","Generate Face Tracking?", "OK", "Cancel"))
             {
-                bool add = EditorUtility.DisplayDialog("Add Face Tracking","Generate Face Tracking, Parameter Cost: " + cost.ToString(), "OK", "Cancel");
-                if(add)
-                {
-                    CreateFTBlendshapeController();
-                    AssetDatabase.SaveAssets();
-                }
+                CreateFTBlendshapeController();
+                AssetDatabase.SaveAssets();
             }
-            
         }
 
         private void RemoveFeatures()
         {
             InitializeAAC();
-            bool remove = EditorUtility.DisplayDialog("Remove Face Tracking", "Remove Face Tracking from Animator (and items selected for deletion)?", "OK", "Cancel");
-            if (remove)
+            if (EditorUtility.DisplayDialog("VRCFTGenerator: Remove", "Remove Face Tracking from Animator (and items selected for deletion)?", "OK", "Cancel"))
             {
                 RemoveFTBlendshapeController();
                 AssetDatabase.SaveAssets();
@@ -314,119 +304,6 @@ namespace Raz.VRCFTGenerator
                     i++;
                 }
             }
-        }
-
-        private int ValidateFTSetup()
-        {
-            int cost = 1;
-            Dictionary<string, VRCFTValues.ParamMode> SelectedParameters = new Dictionary<string, VRCFTValues.ParamMode>();
-            Dictionary<string, string> SelectedShapes = new Dictionary<string, string>();
-            Dictionary<string, List<string>> BadParameters = new Dictionary<string, List<string>>();
-            List<string> DuplicateParameters = new List<string>();
-
-            bool isValid = true;
-
-            foreach (ParamSpecifier specification in generator.paramsToAnimate)
-            {
-                if(!SelectedParameters.ContainsKey(specification.VRCFTParameter.ToString()))
-                {
-                    SelectedParameters.Add(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter), specification.mode);
-                    cost += (int) specification.mode;
-                    cost += VRCFTValues.CombinedMapping.ContainsKey(Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter)) && specification.mode != VRCFTValues.ParamMode.floatParam ? 1 : 0;
-                } else {
-                    DuplicateParameters.Add(specification.VRCFTParameter.ToString());
-                    Debug.LogWarning("VRCFTGenerator: Parameter " + Enum.GetName(typeof(VRCFTValues.ParameterName), specification.VRCFTParameter) + " Is Present Multiple Times");
-                    isValid = false;
-                }
-            }
-
-            foreach (string param in SelectedParameters.Keys.ToArray())
-            {
-                List<string> shapesToAdd = new List<string>();
-
-                string param0 = "";
-
-                if (VRCFTValues.CombinedMapping.ContainsKey(param))
-                {
-                    param0 = VRCFTValues.CombinedMapping[param][0];
-                    string param1 = VRCFTValues.CombinedMapping[param][1];
-
-                    if (VRCFTValues.AveragedMapping.ContainsKey(param1))
-                    {
-                        shapesToAdd.Add(VRCFTValues.AveragedMapping[param1][0]);
-                        shapesToAdd.Add(VRCFTValues.AveragedMapping[param1][1]);
-                    } else {
-                        shapesToAdd.Add(param1);
-                    }
-                } else {
-                    param0 = param;
-                }
-
-                if (VRCFTValues.AveragedMapping.ContainsKey(param0))
-                {
-                    shapesToAdd.Add(VRCFTValues.AveragedMapping[param0][0]);
-                    shapesToAdd.Add(VRCFTValues.AveragedMapping[param0][1]);
-                } else {
-                    shapesToAdd.Add(param0);
-                }
-
-
-                foreach (string shape in shapesToAdd)
-                {
-                    if (!SelectedShapes.Keys.Contains(shape))
-                    {
-                        SelectedShapes.Add(shape, param);
-                    } else {
-                        isValid = false;
-                        if (!BadParameters.Keys.Contains(shape))
-                        {
-                            BadParameters.Add(shape, new List<string> { SelectedShapes[shape] });
-                        }
-
-                        BadParameters[shape].Add(param);
-                        
-                        Debug.LogWarning("VRCFTGenerator: Parameter " + param + " adds the shape " + shape + ", but it's already been added by " + SelectedShapes[shape]);
-                    }
-                }
-            }
-
-            if (!isValid)
-            {
-                string duplicateShapeList = Environment.NewLine;
-                if (BadParameters.Keys.Count > 0)
-                {
-                    duplicateShapeList = "The following shapes are specified by multiple parameters: " + Environment.NewLine;
-                    foreach (string shape in BadParameters.Keys)
-                    {
-                        duplicateShapeList += shape + ", added by " + Environment.NewLine;
-                        foreach (string param in BadParameters[shape])
-                        {
-                            duplicateShapeList += "   - " + param + Environment.NewLine;
-                        }
-                        duplicateShapeList += Environment.NewLine;
-                    }
-                }
-
-                if (DuplicateParameters.Count > 0)
-                {
-                    duplicateShapeList += Environment.NewLine + "The following Parameters are specified multiple times:" + Environment.NewLine;
-
-                    foreach (string param in DuplicateParameters)
-                    {
-                        duplicateShapeList += param + Environment.NewLine;
-                    }
-                }
-
-
-                EditorUtility.DisplayDialog("VRCFTGenerator: Duplicate Shapes or Parameters", duplicateShapeList, "OK");
-            }
-
-            if (!isValid)
-            {
-                cost = 0;
-            }
-
-            return cost;
         }
 
         private void CreateFTBlendshapeController()
