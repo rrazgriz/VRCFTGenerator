@@ -495,8 +495,8 @@ namespace Raz.VRCFTGenerator
                             binaryCastState.DrivingCasts(boolParam, 0f, 1f, boolParamAsFloat, 0f, 1f);
                         }
 
-                        var positiveTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam1[j]);
-                        var negativeTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam2[j]);
+                        var positiveTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam1[j], param + $"_b{binarySuffix.ToString()}_Positive");
+                        var negativeTree = CreateProxyTree(boolParamAsFloat, zeroClips[j], oneClipsParam2[j], param + $"_b{binarySuffix.ToString()}_Negative");
 
                         binarySumChildBlendTreesPositive[j] = positiveTree;
                         binarySumChildBlendTreesNegative[j] = negativeTree;
@@ -504,8 +504,8 @@ namespace Raz.VRCFTGenerator
                     }
                     
                     BlendTree childMotion;
-                    BlendTree parameterDirectBlendTreePositive = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesPositive);
-                    BlendTree parameterDirectBlendTreeNegative = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesNegative);
+                    BlendTree parameterDirectBlendTreePositive = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesPositive, param + "_Binary_Positive");
+                    BlendTree parameterDirectBlendTreeNegative = CreateDirectTree(decodeLayer, parameterConstant1, binarySumChildBlendTreesBlendParams, binarySumChildBlendTreesNegative, param + "_Binary_Negative");
 
                     if (isCombinedParam)
                     {
@@ -518,7 +518,7 @@ namespace Raz.VRCFTGenerator
                             binaryCastState.DrivingCasts(boolParamNegative, 0f, 1f, boolParamNegativeAsFloat, 0f, 1f);
                         }
 
-                        var combinedTree = CreateFactorTree(boolParamNegativeAsFloat, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative);
+                        var combinedTree = CreateFactorTree(boolParamNegativeAsFloat, parameterDirectBlendTreePositive, parameterDirectBlendTreeNegative, param + "_Combined");
                         childMotion = combinedTree;
                     } else {
                         childMotion = parameterDirectBlendTreePositive;
@@ -559,11 +559,11 @@ namespace Raz.VRCFTGenerator
                         combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                     }
 
-                    BlendTree childMotion = CreateCombinedTree(fx.FloatParameter(param), minusClip, zeroClip, oneClip);
+                    BlendTree childMotion = CreateCombinedTree(fx.FloatParameter(param), minusClip, zeroClip, oneClip, param + "_Combined");
                     binarySumTopLevelChildMotions.Add(new ChildMotion {motion = childMotion, directBlendParameter = binarySumTopLevelNormalizerParam.Name, timeScale = 1.0f, threshold = 0.0f});
                 }
 
-                var binarySumTopLevelDirectBlendTree = CreateDirectTree(decodeLayer, binarySumTopLevelNormalizerParam, binarySumTopLevelChildMotions.ToArray());
+                var binarySumTopLevelDirectBlendTree = CreateDirectTree(decodeLayer, binarySumTopLevelNormalizerParam, binarySumTopLevelChildMotions.ToArray(), "DecodeBlendTree");
                 decodeState.WithAnimation(binarySumTopLevelDirectBlendTree);
 
                 decodeBlendTreeToCombine = binarySumTopLevelDirectBlendTree;
@@ -646,12 +646,11 @@ namespace Raz.VRCFTGenerator
                         }
                     }
 
-                    var factorTree = CreateFactorTree(smoothingFactorParameter, CreateProxyTree(parameter, zeroClip, oneClip), CreateSmoothingTree(smoothedParameter, zeroClip, oneClip));
+                    var factorTree = CreateFactorTree(smoothingFactorParameter, CreateProxyTree(parameter, zeroClip, oneClip, parameter.Name + "_SmoothingA"), CreateSmoothingTree(smoothedParameter, zeroClip, oneClip, parameter.Name + "_SmoothingB"), parameter.Name + "_Smoothing");
                     smoothingChildMotions.Add(new ChildMotion {motion = factorTree, directBlendParameter = directNormalizer.Name, timeScale = 1.0f, threshold = 0.0f});
                 }
 
-                var smoothingDirectBlendTree = aac.NewBlendTreeAsRaw();
-                smoothingDirectBlendTree = CreateDirectTree(smoothingLayer, directNormalizer, smoothingChildMotions.ToArray());
+                var smoothingDirectBlendTree = CreateDirectTree(smoothingLayer, directNormalizer, smoothingChildMotions.ToArray(), "Smoothing");
 
                 var offState = smoothingLayer.NewState("FaceTracking_Off").WithAnimation(smoothingDisabledClip);
                 var smoothingState = smoothingLayer.NewState("Smoothing").WithAnimation(smoothingDirectBlendTree);
@@ -695,7 +694,7 @@ namespace Raz.VRCFTGenerator
                 AacFlFloatParameter[] blendParameters = {parameterConstant1, parameterConstant1};
                 BlendTree[] combinedChildren = {decodeBlendTreeToCombine, smoothingBlendTreeToCombine};
 
-                combinedBlendTree = CreateDirectTree(ftCombinedLayer, parameterConstant1, blendParameters, combinedChildren);
+                combinedBlendTree = CreateDirectTree(ftCombinedLayer, parameterConstant1, blendParameters, combinedChildren, "CombinedFaceTracking");
 
                 var disabledState = ftCombinedLayer.NewState("Disabled").WithAnimation(combinedDisabledClip);
                 var enabledState = ftCombinedLayer.NewState("Enabled").WithAnimation(combinedBlendTree);
@@ -877,7 +876,12 @@ namespace Raz.VRCFTGenerator
 
         // // //
 
-        private BlendTree CreateCombinedTree(AacFlFloatParameter manualControlParameter, AacFlClip minusClip, AacFlClip zeroClip, AacFlClip oneClip)
+        string AssetName(string name)
+        {
+            return $"zAutogenerated__{generator.assetKey}__{name}";
+        }
+
+        private BlendTree CreateCombinedTree(AacFlFloatParameter manualControlParameter, AacFlClip minusClip, AacFlClip zeroClip, AacFlClip oneClip, string name = "")
         {
             var proxyTree = aac.NewBlendTreeAsRaw();
             proxyTree.blendParameter = manualControlParameter.Name;
@@ -891,10 +895,14 @@ namespace Raz.VRCFTGenerator
                 new ChildMotion {motion = zeroClip.Clip, timeScale = 1, threshold = 0},
                 new ChildMotion {motion = oneClip.Clip, timeScale = 1, threshold = 1}
             };
+
+            if(name != "")
+                proxyTree.name = AssetName(name);
+
             return proxyTree;
         }
 
-        private BlendTree CreateProxyTree(AacFlFloatParameter manualControlParameter, AacFlClip zeroClip, AacFlClip oneClip)
+        private BlendTree CreateProxyTree(AacFlFloatParameter manualControlParameter, AacFlClip zeroClip, AacFlClip oneClip, string name = "")
         {
             var proxyTree = aac.NewBlendTreeAsRaw();
             proxyTree.blendParameter = manualControlParameter.Name;
@@ -907,10 +915,14 @@ namespace Raz.VRCFTGenerator
                 new ChildMotion {motion = zeroClip.Clip, timeScale = 1, threshold = 0},
                 new ChildMotion {motion = oneClip.Clip, timeScale = 1, threshold = 1}
             };
+
+            if(name != "")
+                proxyTree.name = AssetName(name);
+
             return proxyTree;
         }
 
-        private BlendTree CreateFactorTree(AacFlFloatParameter smoothingFactorParameter, BlendTree proxyTree, BlendTree smoothingTree)
+        private BlendTree CreateFactorTree(AacFlFloatParameter smoothingFactorParameter, BlendTree proxyTree, BlendTree smoothingTree, string name = "")
         {
             var factorTree = aac.NewBlendTreeAsRaw();
             {
@@ -924,11 +936,15 @@ namespace Raz.VRCFTGenerator
                     new ChildMotion {motion = proxyTree, timeScale = 1, threshold = 0},
                     new ChildMotion {motion = smoothingTree, timeScale = 1, threshold = 1}
                 };
+
+                if(name != "")
+                    proxyTree.name = AssetName(name);
+
             }
             return factorTree;
         }
 
-        private BlendTree CreateSmoothingTree(AacFlFloatParameter smoothedParameter, AacFlClip zeroClip, AacFlClip oneClip)
+        private BlendTree CreateSmoothingTree(AacFlFloatParameter smoothedParameter, AacFlClip zeroClip, AacFlClip oneClip, string name = "")
         {
             var smoothingTree = aac.NewBlendTreeAsRaw();
             smoothingTree.blendParameter = smoothedParameter.Name;
@@ -941,10 +957,14 @@ namespace Raz.VRCFTGenerator
                 new ChildMotion {motion = zeroClip.Clip, timeScale = 1, threshold = 0},
                 new ChildMotion {motion = oneClip.Clip, timeScale = 1, threshold = 1}
             };
+
+            if(name != "")
+                smoothingTree.name = AssetName(name);
+
             return smoothingTree;
         }
 
-        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, AacFlFloatParameter[] blendParameters, BlendTree[] children, float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
+        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, AacFlFloatParameter[] blendParameters, BlendTree[] children, string name = "", float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
         {
             if(blendParameters.Length != children.Length)
             {
@@ -958,7 +978,10 @@ namespace Raz.VRCFTGenerator
             directTree.maxThreshold = maxThreshold;
             directTree.useAutomaticThresholds = useAutomaticThresholds;
             ChildMotion[] childMotions = new ChildMotion[blendParameters.Length];
-            
+
+            if(name != "")
+                directTree.name = AssetName(name);
+
             for(int ch = 0; ch < children.Length; ch++)
             {
                 childMotions[ch] = new ChildMotion {motion = children[ch], directBlendParameter = blendParameters[ch].Name, timeScale = 1.0f, threshold = 0.0f};
@@ -969,7 +992,7 @@ namespace Raz.VRCFTGenerator
             return directTree;
         }
 
-        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, ChildMotion[] childMotions, float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
+        private BlendTree CreateDirectTree(AacFlLayer layer, AacFlFloatParameter normalizingParameter, ChildMotion[] childMotions, string name = "", float minThreshold = 0f, float maxThreshold = 1f, bool useAutomaticThresholds = false)
         {
             var directTree = aac.NewBlendTreeAsRaw();
             directTree.blendType = BlendTreeType.Direct;
@@ -978,6 +1001,9 @@ namespace Raz.VRCFTGenerator
             directTree.maxThreshold = maxThreshold;
             directTree.useAutomaticThresholds = useAutomaticThresholds;
 
+            if(name != "")
+                directTree.name = AssetName(name);
+            
             directTree.children = childMotions;
 
             return directTree;
