@@ -461,29 +461,48 @@ namespace Raz.VRCFTGenerator
                             var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
 
                             var zeroClip = aac.NewClip(param + "_0_b" + binarySuffix);
-                            var oneClipParam1  = aac.NewClip(param + "_1_b" + binarySuffix);
-                            var oneClipParam2 = aac.NewClip(param + "_2_b" + binarySuffix);
+                            var plusClip  = aac.NewClip(param + "_1_b" + binarySuffix);
+                            var minusClip = aac.NewClip(param + "_-1_b" + binarySuffix);
 
-                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                            oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
-                            oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-
-                            decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                            combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-
-                            if(keyframeParamIsCombined)
+                            // TongueSteps neutral is -1, not 0
+                            if(keyframeParam == "TongueSteps")
                             {
-                                zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-                                oneClipParam1.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-                                oneClipParam2.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+                                zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                                plusClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                                minusClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
 
+                                plusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+                                zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+
+                                decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                                combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
                                 decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                                 combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
                             }
+                            else
+                            {
+                                zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                                plusClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                                minusClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+
+                                decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                                combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+
+                                if(keyframeParamIsCombined)
+                                {
+                                    zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                    plusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                    minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+
+                                    decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                    combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                                }
+                            }
 
                             zeroClips[j] = zeroClip;
-                            oneClipsParam1[j] = oneClipParam1;
-                            oneClipsParam2[j] = oneClipParam2;
+                            oneClipsParam1[j] = plusClip;
+                            oneClipsParam2[j] = minusClip;
                         }
 
                         string boolParamAsFloatName = generator.useImplicitParameterCasting ? param + binarySuffix.ToString() : SystemPrefix + param + binarySuffix.ToString() + "_Float";
@@ -549,14 +568,33 @@ namespace Raz.VRCFTGenerator
                         var keyframePositive = fx.FloatParameter(SystemPrefix + keyframePositiveName);
                         var keyframeNegative = fx.FloatParameter(SystemPrefix + keyframeNegativeName);
 
-                        zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                        oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
-                        minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+                        // TongueSteps neutral is -1, not 0
+                        if(keyframeParam == "TongueSteps")
+                        {
+                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                            oneClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                            minusClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
 
-                        decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                        decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
-                        combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
-                        combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                            oneClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+                            zeroClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                            minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+
+                            decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                            combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                        }
+                        else
+                        {
+                            zeroClip.Animating(clip  => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            oneClip.Animating(clip   => clip.AnimatesAnimator(keyframePositive).WithOneFrame(oneClipVal));
+                            minusClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(oneClipVal));
+
+                            decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            decodeDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                            combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframePositive).WithOneFrame(0f));
+                            combinedDisabledClip.Animating(clip => clip.AnimatesAnimator(keyframeNegative).WithOneFrame(0f));
+                        }
                     }
 
                     BlendTree childMotion = CreateCombinedTree(fx.FloatParameter(param), minusClip, zeroClip, oneClip, param + "_Combined");
